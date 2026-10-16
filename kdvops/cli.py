@@ -8,6 +8,7 @@ from rich.panel import Panel
 from rich.prompt import Confirm
 
 from .agent import AgentClient
+from .broker import BrokerConfig, serve
 from .config import Settings
 from .workspace import Workspace
 
@@ -148,6 +149,16 @@ def doctor() -> None:
     except (ValueError, OSError, httpx.HTTPError) as exc:
         console.print(f"[red]Gateway compatibility check failed:[/] {exc}")
         raise typer.Exit(1)
+
+
+@app.command()
+def broker() -> None:
+    """Run the restricted server-side broker for an isolated OpenClaw Gateway."""
+    try:
+        serve(BrokerConfig.from_env())
+    except (ValueError, OSError) as exc:
+        console.print(f"[red]Broker configuration error:[/] {exc}")
+        raise typer.Exit(2)
 
 
 if __name__ == "__main__":

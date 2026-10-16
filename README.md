@@ -1,4 +1,4 @@
-# KDvops CLI · MVP 0.1.0
+# KDvops CLI · 0.2.0
 
 Containerized, human-supervised coding CLI written in Python. The agent runs remotely on OpenClaw (Raspberry Pi 5 behind Cloudflare Tunnel), while local tools operate only on a Docker-mounted `/workspace`.
 
@@ -62,6 +62,23 @@ For OpenClaw 2026.7.1+, enable the API on a private/controlled ingress:
 ```
 
 Restart the Gateway after changing its configuration. Treat its bearer token as full operator access; do not expose this API publicly without a trusted access boundary.
+
+## Restricted broker
+
+Production clients should connect to the restricted broker instead of receiving the Gateway operator token. The broker exposes only `GET /health`, authenticated `GET /v1/models`, and authenticated `POST /v1/chat/completions`. It pins requests to `openclaw/kdvops`, accepts only the three local workspace tools, rejects streaming and unknown fields, and applies body/rate limits.
+
+Required server-side environment variables:
+
+```env
+KDVOPS_BROKER_TOKEN=<dedicated-client-token>
+OPENCLAW_UPSTREAM_TOKEN=<isolated-gateway-token>
+OPENCLAW_UPSTREAM_URL=http://openclaw-kdvops:18789/v1
+OPENCLAW_UPSTREAM_MODEL=openclaw/kdvops
+```
+
+Run it from the published image with `broker` as the command. Never reuse the primary OpenClaw Gateway token.
+
+The broker implementation and its local test suite are complete. Deployment and end-to-end validation against the isolated OpenClaw Gateway in Kubernetes are still pending; do not treat the current release as production-validated until that acceptance test passes.
 
 ## Security and limitations
 

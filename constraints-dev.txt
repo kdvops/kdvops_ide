@@ -24,3 +24,4 @@ shellingham==1.5.4
 typer==0.27.3
 typing-extensions==4.16.0
 typing-inspection==0.4.4
+uvicorn==0.38.0
