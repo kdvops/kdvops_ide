@@ -39,6 +39,30 @@ Status:
 docker compose run --rm kdvops status
 ```
 
+Gateway compatibility check:
+
+```bash
+docker compose run --rm kdvops doctor
+```
+
+The command verifies authentication, confirms that `/v1/models` returns the OpenClaw agent targets, and detects the common case where the Gateway serves dashboard HTML because Chat Completions is disabled.
+
+For OpenClaw 2026.7.1+, enable the API on a private/controlled ingress:
+
+```json5
+{
+  gateway: {
+    http: {
+      endpoints: {
+        chatCompletions: { enabled: true }
+      }
+    }
+  }
+}
+```
+
+Restart the Gateway after changing its configuration. Treat its bearer token as full operator access; do not expose this API publicly without a trusted access boundary.
+
 ## Security and limitations
 
 - Docker bind-mounts the selected host directory as `/workspace:rw`. This is an actual write permission: Docker and the Python process can modify those files; human approval is enforced in application logic.
@@ -60,6 +84,14 @@ pytest -q
 ```
 
 GitHub Actions also runs Ruff, the test suite with an 80% coverage floor, and a container build on every pull request and push to `main`.
+
+Pushes to `main` publish a multi-architecture image (`linux/amd64` and `linux/arm64`) to Docker Hub:
+
+```bash
+docker pull silencfox/kdvops_cl:latest
+```
+
+Every build also receives a commit-specific `sha-<full-commit>` tag. Publishing requires the `DOCKERHUB_TOKEN` GitHub Actions secret; pull requests build and test the image without receiving Docker Hub credentials or pushing it.
 
 ## Development workflow
 

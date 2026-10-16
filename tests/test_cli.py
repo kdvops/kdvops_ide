@@ -28,6 +28,40 @@ def test_status_reports_bad_configuration(tmp_path):
     assert "Configuration error" in result.output
 
 
+def test_doctor_reports_compatible_gateway(tmp_path, monkeypatch):
+    monkeypatch.setattr("kdvops.cli.AgentClient.probe", lambda self: ["openclaw/default"])
+    result = runner.invoke(
+        app,
+        ["doctor"],
+        env={
+            "OPENCLAW_API_URL": "https://example.test/v1",
+            "OPENCLAW_TOKEN": "token",
+            "KDVOPS_WORKSPACE": str(tmp_path),
+        },
+    )
+    assert result.exit_code == 0
+    assert "compatible" in result.output
+    assert "openclaw/default" in result.output
+
+
+def test_doctor_reports_disabled_gateway_endpoint(tmp_path, monkeypatch):
+    def fail(self):
+        raise ValueError("endpoint appears disabled")
+
+    monkeypatch.setattr("kdvops.cli.AgentClient.probe", fail)
+    result = runner.invoke(
+        app,
+        ["doctor"],
+        env={
+            "OPENCLAW_API_URL": "https://example.test/v1",
+            "OPENCLAW_TOKEN": "token",
+            "KDVOPS_WORKSPACE": str(tmp_path),
+        },
+    )
+    assert result.exit_code == 1
+    assert "disabled" in result.output
+
+
 def test_once_mode_executes_tool_cycle(tmp_path, monkeypatch):
     replies = iter(
         [

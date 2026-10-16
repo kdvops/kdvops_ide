@@ -1,4 +1,6 @@
 """OpenAI-compatible Chat Completions client; requires endpoint enabled on OpenClaw."""
+from uuid import uuid4
+
 import httpx
 
 TOOLS = [
@@ -12,11 +14,36 @@ class AgentClient:
     def __init__(self, settings, transport=None):
         self.settings = settings
         self.transport = transport
+        self.conversation_id = f"kdvops:{uuid4()}"
+
+    def _client(self) -> httpx.Client:
+        return httpx.Client(timeout=self.settings.timeout, follow_redirects=False, transport=self.transport)
+
+    def probe(self) -> list[str]:
+        """Verify that the configured Gateway exposes the OpenAI-compatible API."""
+        with self._client() as client:
+            response = client.get(
+                self.settings.endpoint + "/models",
+                headers={"Authorization": f"Bearer {self.settings.token}"},
+            )
+            response.raise_for_status()
+            if "application/json" not in response.headers.get("content-type", "").lower():
+                raise ValueError(
+                    "OpenClaw Chat Completions endpoint appears disabled: /v1/models did not return JSON"
+                )
+            payload = response.json()
+        data = payload.get("data") if isinstance(payload, dict) else None
+        if not isinstance(data, list) or not data:
+            raise ValueError("Invalid models response from OpenClaw")
+        models = [item.get("id") for item in data if isinstance(item, dict)]
+        if len(models) != len(data) or not all(isinstance(model, str) and model for model in models):
+            raise ValueError("Invalid models response from OpenClaw")
+        return models
 
     def complete(self, messages: list[dict]) -> dict:
         url = self.settings.endpoint + "/chat/completions"
-        with httpx.Client(timeout=self.settings.timeout, follow_redirects=False, transport=self.transport) as client:
-            response = client.post(url, headers={"Authorization": f"Bearer {self.settings.token}"}, json={"model": self.settings.model, "messages": messages, "tools": TOOLS, "tool_choice": "auto", "stream": False})
+        with self._client() as client:
+            response = client.post(url, headers={"Authorization": f"Bearer {self.settings.token}"}, json={"model": self.settings.model, "user": self.conversation_id, "messages": messages, "tools": TOOLS, "tool_choice": "auto", "stream": False})
             response.raise_for_status()
             payload = response.json()
         try:

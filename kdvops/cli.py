@@ -135,5 +135,20 @@ def status() -> None:
         raise typer.Exit(2)
 
 
+@app.command()
+def doctor() -> None:
+    """Verify Gateway connectivity and OpenAI-compatible API support."""
+    try:
+        cfg = Settings.from_env()
+        models = AgentClient(cfg).probe()
+        console.print("[bold green]Gateway compatible[/]")
+        console.print("Available agent targets: " + ", ".join(models), markup=False)
+        if cfg.model not in models:
+            console.print(f"Configured model {cfg.model!r} is not advertised by the Gateway", markup=False)
+    except (ValueError, OSError, httpx.HTTPError) as exc:
+        console.print(f"[red]Gateway compatibility check failed:[/] {exc}")
+        raise typer.Exit(1)
+
+
 if __name__ == "__main__":
     app()
