@@ -1,0 +1,22 @@
+services:
+  kdvops:
+    build: .
+    image: kdvops-cli:local
+    stdin_open: true
+    tty: true
+    init: true
+    env_file: .env
+    environment:
+      KDVOPS_WORKSPACE: /workspace
+    volumes:
+      - ${HOST_WORKSPACE:?Set HOST_WORKSPACE in .env}:/workspace:rw
+    working_dir: /workspace
+    read_only: true
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,size=32m
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    pids_limit: 128
+    mem_limit: 512m
