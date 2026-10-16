@@ -5,4 +5,4 @@
 - [x] Force the isolated KDvops agent target.
 - [x] Add request size and fixed-window rate limits.
 - [x] Add unit and HTTP integration tests.
-- [ ] Validate against the isolated Gateway in Kubernetes.
+- [x] Validate against the isolated Gateway in Kubernetes.

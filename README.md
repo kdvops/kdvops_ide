@@ -78,7 +78,7 @@ OPENCLAW_UPSTREAM_MODEL=openclaw/kdvops
 
 Run it from the published image with `broker` as the command. Never reuse the primary OpenClaw Gateway token.
 
-The broker implementation and its local test suite are complete. Deployment and end-to-end validation against the isolated OpenClaw Gateway in Kubernetes are still pending; do not treat the current release as production-validated until that acceptance test passes.
+The broker has been deployed and validated end-to-end against an isolated OpenClaw Gateway in Kubernetes: the CLI listed and read files from a temporary workspace without exposing the Gateway token. Public ingress and Cloudflare Access are still pending, so the service currently remains cluster-internal.
 
 ## Security and limitations
 
