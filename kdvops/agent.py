@@ -9,13 +9,20 @@ TOOLS = [
 
 
 class AgentClient:
-    def __init__(self, settings):
+    def __init__(self, settings, transport=None):
         self.settings = settings
+        self.transport = transport
 
     def complete(self, messages: list[dict]) -> dict:
         url = self.settings.endpoint + "/chat/completions"
-        with httpx.Client(timeout=self.settings.timeout, follow_redirects=False) as client:
+        with httpx.Client(timeout=self.settings.timeout, follow_redirects=False, transport=self.transport) as client:
             response = client.post(url, headers={"Authorization": f"Bearer {self.settings.token}"}, json={"model": self.settings.model, "messages": messages, "tools": TOOLS, "tool_choice": "auto", "stream": False})
             response.raise_for_status()
             payload = response.json()
-        return payload["choices"][0]["message"]
+        try:
+            message = payload["choices"][0]["message"]
+        except (KeyError, IndexError, TypeError) as exc:
+            raise ValueError("Invalid response from OpenClaw: missing choices[0].message") from exc
+        if not isinstance(message, dict):
+            raise TypeError("Invalid response from OpenClaw: message must be an object")
+        return message

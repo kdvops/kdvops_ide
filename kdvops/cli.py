@@ -1,7 +1,7 @@
 import difflib
 import json
-from pathlib import Path
 
+import httpx
 import typer
 from rich.console import Console
 from rich.panel import Panel
@@ -13,6 +13,7 @@ from .workspace import Workspace
 
 app = typer.Typer(help="KDvops CLI: supervised local coding with a remote OpenClaw agent")
 console = Console()
+MAX_DIFF_CHARS = 16_000
 
 SYSTEM = """You are a coding assistant. You can inspect and propose edits only through provided tools.
 All paths are relative to the mounted workspace. Never request secrets or access outside it.
@@ -31,9 +32,14 @@ def execute_tool(ws: Workspace, name: str, arguments: dict) -> str:
             dest = ws.path(path)
             old = ws.read_file(path) if dest.exists() else ""
             diff = "".join(difflib.unified_diff(old.splitlines(keepends=True), content.splitlines(keepends=True), fromfile=f"a/{path}", tofile=f"b/{path}"))
-            console.print(Panel(diff[:16000] or "(No changes)", title=f"Proposed: {path}"))
             if old == content:
                 return "No changes needed"
+            if len(diff) > MAX_DIFF_CHARS:
+                return (
+                    f"ERROR: Diff exceeds display limit ({len(diff)} > {MAX_DIFF_CHARS} characters); "
+                    "split the change into smaller edits"
+                )
+            console.print(Panel(diff or "(No changes)", title=f"Proposed: {path}"))
             if not Confirm.ask(f"Apply modification to {path}?", default=False):
                 return "DENIED by user; no changes applied"
             ws.write_file(path, content)
@@ -44,7 +50,11 @@ def execute_tool(ws: Workspace, name: str, arguments: dict) -> str:
 
 
 def chat_loop(settings: Settings, once: str | None = None) -> None:
-    ws = Workspace(settings.workspace)
+    ws = Workspace(
+        settings.workspace,
+        allow_sensitive_reads=settings.allow_sensitive_reads,
+        allow_sensitive_writes=settings.allow_sensitive_writes,
+    )
     agent = AgentClient(settings)
     messages = [{"role": "system", "content": SYSTEM}]
     console.print(f"[bold cyan]KDvops CLI[/] | Workspace: {ws.root} | Endpoint: {settings.endpoint}")
@@ -86,7 +96,7 @@ def chat_loop(settings: Settings, once: str | None = None) -> None:
                     messages.append({"role": "tool", "tool_call_id": call["id"], "content": result})
             else:
                 console.print("[yellow]Tool iteration limit reached[/]")
-        except Exception as exc:
+        except (httpx.HTTPError, ValueError, KeyError, TypeError) as exc:
             console.print(f"[red]Connection or protocol error:[/] {type(exc).__name__}: {exc}")
             if once is not None:
                 raise typer.Exit(1)

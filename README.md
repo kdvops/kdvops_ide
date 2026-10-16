@@ -13,6 +13,7 @@ Do not expose your token in tickets, logs, screenshots or git. Cloudflare Tunnel
 ```bash
 cp .env.example .env
 # Edit HOST_WORKSPACE, OPENCLAW_API_URL, OPENCLAW_TOKEN, OPENCLAW_MODEL
+# On Linux, set KDVOPS_UID to the result of: id -u
 docker compose build
 docker compose run --rm kdvops chat
 ```
@@ -42,9 +43,11 @@ docker compose run --rm kdvops status
 
 - Docker bind-mounts the selected host directory as `/workspace:rw`. This is an actual write permission: Docker and the Python process can modify those files; human approval is enforced in application logic.
 - The CLI only exposes `list_files`, `read_file`, and approval-gated `write_file` to the remote agent. No arbitrary shell execution or remote host filesystem mounts.
+- Common secret-bearing files (`.env*`, private keys, PEM/PFX files, kubeconfig and credentials files) are blocked from both reads and writes by default. Deliberate sessions can opt in separately with `KDVOPS_ALLOW_SENSITIVE_READS=true` or `KDVOPS_ALLOW_SENSITIVE_WRITES=true`; avoid doing so unless required.
+- Oversized diffs are rejected instead of being partially displayed. Split large changes into reviewable edits.
 - No automatic Git rollback, streaming, terminal execution, multi-file atomic transactions, or native Gateway pairing yet.
 - The workspace is not a hardened security boundary against a compromised process. Avoid mounting sensitive folders; use a dedicated low-privilege account and backup/version control.
-- Path checks reject traversal and symlinks, but concurrent filesystem races and hostile mounts require further hardening. The write implementation does not promise crash-atomic changes.
+- Path checks reject traversal and symlinks. Writes use a same-directory temporary file and atomic replacement, but concurrent filesystem races and hostile mounts still require further hardening.
 - Files sent for analysis travel to the configured remote AI agent and any models/services it uses.
 - Cloudflare Access interactive browser policies may block headless API clients. Configure appropriate service authentication if Access is enabled.
 - `OPENCLAW_MODEL` and API endpoint are deployment-dependent; test against your version.
@@ -55,6 +58,8 @@ docker compose run --rm kdvops status
 python -m pip install -e '.[dev]'
 pytest -q
 ```
+
+GitHub Actions also runs Ruff, the test suite with an 80% coverage floor, and a container build on every pull request and push to `main`.
 
 ## Development workflow
 

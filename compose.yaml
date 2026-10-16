@@ -1,6 +1,9 @@
 services:
   kdvops:
-    build: .
+    build:
+      context: .
+      args:
+        KDVOPS_UID: ${KDVOPS_UID:-10001}
     image: kdvops-cli:local
     stdin_open: true
     tty: true
