@@ -20,7 +20,10 @@ class AgentClient:
         return httpx.Client(timeout=self.settings.timeout, follow_redirects=False, transport=self.transport)
 
     def _headers(self) -> dict[str, str]:
-        headers = {"Authorization": f"Bearer {self.settings.token}"}
+        headers = {
+            "Authorization": f"Bearer {self.settings.token}",
+            "User-Agent": "kdvops-cli/0.2.0",
+        }
         client_id = getattr(self.settings, "cf_access_client_id", "")
         client_secret = getattr(self.settings, "cf_access_client_secret", "")
         if client_id and client_secret:

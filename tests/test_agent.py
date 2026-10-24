@@ -38,6 +38,7 @@ def test_complete_sends_broker_and_cloudflare_access_headers():
     AgentClient(Settings(), transport=httpx.MockTransport(handler)).complete([])
 
     assert requests[0].headers["Authorization"] == "Bearer test-token"
+    assert requests[0].headers["User-Agent"] == "kdvops-cli/0.2.0"
     assert requests[0].headers["CF-Access-Client-Id"] == "cf-client-id"
     assert requests[0].headers["CF-Access-Client-Secret"] == "cf-client-secret"
 
@@ -78,6 +79,7 @@ def test_probe_sends_broker_and_cloudflare_access_headers():
     AgentClient(Settings(), transport=httpx.MockTransport(handler)).probe()
 
     assert requests[0].headers["Authorization"] == "Bearer test-token"
+    assert requests[0].headers["User-Agent"] == "kdvops-cli/0.2.0"
     assert requests[0].headers["CF-Access-Client-Id"] == "cf-client-id"
     assert requests[0].headers["CF-Access-Client-Secret"] == "cf-client-secret"
 

@@ -11,7 +11,7 @@ class Settings:
     workspace: Path
     cf_access_client_id: str = ""
     cf_access_client_secret: str = ""
-    timeout: float = 90.0
+    timeout: float = 300.0
     allow_sensitive_reads: bool = False
     allow_sensitive_writes: bool = False
 
@@ -20,6 +20,7 @@ class Settings:
         endpoint = os.getenv("OPENCLAW_API_URL", "").strip().rstrip("/")
         token = os.getenv("OPENCLAW_TOKEN", "").strip()
         model = os.getenv("OPENCLAW_MODEL", "openclaw").strip()
+        timeout = float(os.getenv("KDVOPS_TIMEOUT", "300"))
         workspace = Path(os.getenv("KDVOPS_WORKSPACE", "/workspace")).resolve(strict=True)
         cf_access_client_id = os.getenv("CF_ACCESS_CLIENT_ID", "").strip()
         cf_access_client_secret = os.getenv("CF_ACCESS_CLIENT_SECRET", "").strip()
@@ -35,6 +36,8 @@ class Settings:
             raise ValueError("OPENCLAW_API_URL must be HTTPS (or localhost for development)")
         if not token:
             raise ValueError("OPENCLAW_TOKEN is required")
+        if timeout <= 0:
+            raise ValueError("KDVOPS_TIMEOUT must be greater than zero")
         if bool(cf_access_client_id) != bool(cf_access_client_secret):
             raise ValueError(
                 "CF_ACCESS_CLIENT_ID and CF_ACCESS_CLIENT_SECRET must be configured together"
@@ -46,6 +49,7 @@ class Settings:
             workspace,
             cf_access_client_id=cf_access_client_id,
             cf_access_client_secret=cf_access_client_secret,
+            timeout=timeout,
             allow_sensitive_reads=allow_sensitive_reads,
             allow_sensitive_writes=allow_sensitive_writes,
         )

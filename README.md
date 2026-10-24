@@ -57,6 +57,8 @@ CF_ACCESS_CLIENT_SECRET=<service-token-client-secret>
 
 The CLI sends these values as `CF-Access-Client-Id` and `CF-Access-Client-Secret` on both model discovery and chat-completion requests. Both variables must be set together. They are separate from `OPENCLAW_TOKEN`, which authenticates to the broker after Cloudflare permits the request.
 
+`KDVOPS_TIMEOUT` controls the HTTP timeout in seconds and defaults to `300`, allowing enough time for gateway orchestration and cloud model responses.
+
 For OpenClaw 2026.7.1+, enable the API on a private/controlled ingress:
 
 ```json5

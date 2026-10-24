@@ -7,6 +7,7 @@ def test_settings_from_env(tmp_path, monkeypatch):
     monkeypatch.setenv("OPENCLAW_API_URL", "https://example.test/v1/")
     monkeypatch.setenv("OPENCLAW_TOKEN", "token")
     monkeypatch.setenv("OPENCLAW_MODEL", "model")
+    monkeypatch.setenv("KDVOPS_TIMEOUT", "123")
     monkeypatch.setenv("CF_ACCESS_CLIENT_ID", "client-id")
     monkeypatch.setenv("CF_ACCESS_CLIENT_SECRET", "client-secret")
     monkeypatch.setenv("KDVOPS_WORKSPACE", str(tmp_path))
@@ -17,6 +18,7 @@ def test_settings_from_env(tmp_path, monkeypatch):
 
     assert settings.endpoint == "https://example.test/v1"
     assert settings.workspace == tmp_path
+    assert settings.timeout == 123
     assert settings.cf_access_client_id == "client-id"
     assert settings.cf_access_client_secret == "client-secret"
     assert settings.allow_sensitive_reads is True
@@ -37,6 +39,16 @@ def test_settings_requires_token(tmp_path, monkeypatch):
     monkeypatch.delenv("OPENCLAW_TOKEN", raising=False)
     monkeypatch.setenv("KDVOPS_WORKSPACE", str(tmp_path))
     with pytest.raises(ValueError, match="TOKEN"):
+        Settings.from_env()
+
+
+def test_settings_requires_positive_timeout(tmp_path, monkeypatch):
+    monkeypatch.setenv("OPENCLAW_API_URL", "https://example.test/v1")
+    monkeypatch.setenv("OPENCLAW_TOKEN", "token")
+    monkeypatch.setenv("KDVOPS_WORKSPACE", str(tmp_path))
+    monkeypatch.setenv("KDVOPS_TIMEOUT", "0")
+
+    with pytest.raises(ValueError, match="KDVOPS_TIMEOUT"):
         Settings.from_env()
 
 
