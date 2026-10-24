@@ -19,12 +19,21 @@ class AgentClient:
     def _client(self) -> httpx.Client:
         return httpx.Client(timeout=self.settings.timeout, follow_redirects=False, transport=self.transport)
 
+    def _headers(self) -> dict[str, str]:
+        headers = {"Authorization": f"Bearer {self.settings.token}"}
+        client_id = getattr(self.settings, "cf_access_client_id", "")
+        client_secret = getattr(self.settings, "cf_access_client_secret", "")
+        if client_id and client_secret:
+            headers["CF-Access-Client-Id"] = client_id
+            headers["CF-Access-Client-Secret"] = client_secret
+        return headers
+
     def probe(self) -> list[str]:
         """Verify that the configured Gateway exposes the OpenAI-compatible API."""
         with self._client() as client:
             response = client.get(
                 self.settings.endpoint + "/models",
-                headers={"Authorization": f"Bearer {self.settings.token}"},
+                headers=self._headers(),
             )
             response.raise_for_status()
             if "application/json" not in response.headers.get("content-type", "").lower():
@@ -43,7 +52,7 @@ class AgentClient:
     def complete(self, messages: list[dict]) -> dict:
         url = self.settings.endpoint + "/chat/completions"
         with self._client() as client:
-            response = client.post(url, headers={"Authorization": f"Bearer {self.settings.token}"}, json={"model": self.settings.model, "user": self.conversation_id, "messages": messages, "tools": TOOLS, "tool_choice": "auto", "stream": False})
+            response = client.post(url, headers=self._headers(), json={"model": self.settings.model, "user": self.conversation_id, "messages": messages, "tools": TOOLS, "tool_choice": "auto", "stream": False})
             response.raise_for_status()
             payload = response.json()
         try:

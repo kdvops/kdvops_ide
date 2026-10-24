@@ -9,6 +9,8 @@ class Settings:
     token = "test-token"
     model = "test-model"
     timeout = 1.0
+    cf_access_client_id = "cf-client-id"
+    cf_access_client_secret = "cf-client-secret"
 
 
 def client_returning(payload, status=200, content_type="application/json"):
@@ -24,6 +26,20 @@ def client_returning(payload, status=200, content_type="application/json"):
 def test_complete_returns_message():
     client = client_returning({"choices": [{"message": {"role": "assistant", "content": "hello"}}]})
     assert client.complete([])["content"] == "hello"
+
+
+def test_complete_sends_broker_and_cloudflare_access_headers():
+    requests = []
+
+    def handler(request):
+        requests.append(request)
+        return httpx.Response(200, json={"choices": [{"message": {"content": "ok"}}]})
+
+    AgentClient(Settings(), transport=httpx.MockTransport(handler)).complete([])
+
+    assert requests[0].headers["Authorization"] == "Bearer test-token"
+    assert requests[0].headers["CF-Access-Client-Id"] == "cf-client-id"
+    assert requests[0].headers["CF-Access-Client-Secret"] == "cf-client-secret"
 
 
 def test_complete_reuses_stable_conversation_id():
@@ -50,6 +66,20 @@ def test_complete_rejects_invalid_protocol(payload):
 def test_probe_returns_openclaw_models():
     client = client_returning({"data": [{"id": "openclaw/default"}]})
     assert client.probe() == ["openclaw/default"]
+
+
+def test_probe_sends_broker_and_cloudflare_access_headers():
+    requests = []
+
+    def handler(request):
+        requests.append(request)
+        return httpx.Response(200, json={"data": [{"id": "openclaw/default"}]})
+
+    AgentClient(Settings(), transport=httpx.MockTransport(handler)).probe()
+
+    assert requests[0].headers["Authorization"] == "Bearer test-token"
+    assert requests[0].headers["CF-Access-Client-Id"] == "cf-client-id"
+    assert requests[0].headers["CF-Access-Client-Secret"] == "cf-client-secret"
 
 
 def test_probe_explains_disabled_endpoint_html_response():

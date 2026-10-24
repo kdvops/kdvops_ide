@@ -13,6 +13,7 @@ Do not expose your token in tickets, logs, screenshots or git. Cloudflare Tunnel
 ```bash
 cp .env.example .env
 # Edit HOST_WORKSPACE, OPENCLAW_API_URL, OPENCLAW_TOKEN, OPENCLAW_MODEL
+# If Cloudflare Access protects the endpoint, also set its Service Token pair.
 # On Linux, set KDVOPS_UID to the result of: id -u
 docker compose build
 docker compose run --rm kdvops chat
@@ -47,6 +48,15 @@ docker compose run --rm kdvops doctor
 
 The command verifies authentication, confirms that `/v1/models` returns the OpenClaw agent targets, and detects the common case where the Gateway serves dashboard HTML because Chat Completions is disabled.
 
+For a broker protected by Cloudflare Access, configure the dedicated Service Token alongside the broker token:
+
+```env
+CF_ACCESS_CLIENT_ID=<service-token-client-id>
+CF_ACCESS_CLIENT_SECRET=<service-token-client-secret>
+```
+
+The CLI sends these values as `CF-Access-Client-Id` and `CF-Access-Client-Secret` on both model discovery and chat-completion requests. Both variables must be set together. They are separate from `OPENCLAW_TOKEN`, which authenticates to the broker after Cloudflare permits the request.
+
 For OpenClaw 2026.7.1+, enable the API on a private/controlled ingress:
 
 ```json5
@@ -78,7 +88,7 @@ OPENCLAW_UPSTREAM_MODEL=openclaw/kdvops
 
 Run it from the published image with `broker` as the command. Never reuse the primary OpenClaw Gateway token.
 
-The broker has been deployed and validated end-to-end against an isolated OpenClaw Gateway in Kubernetes: the CLI listed and read files from a temporary workspace without exposing the Gateway token. Public ingress and Cloudflare Access are still pending, so the service currently remains cluster-internal.
+The broker has been deployed behind public HTTPS ingress and Cloudflare Access and validated against an isolated OpenClaw Gateway in Kubernetes. The CLI receives only the dedicated broker and Cloudflare Service Token credentials; the Gateway operator token remains server-side.
 
 ## Security and limitations
 
