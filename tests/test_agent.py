@@ -32,6 +32,14 @@ def test_complete_returns_message():
     assert client.complete([])["content"] == "hello"
 
 
+def test_complete_accepts_plain_text_as_final_response():
+    client = client_returning(
+        {"choices": [{"message": {"role": "assistant", "content": "plain final answer"}}]}
+    )
+
+    assert client.complete([]) == {"role": "assistant", "content": "plain final answer"}
+
+
 def test_complete_sends_broker_and_cloudflare_access_headers():
     requests = []
 
@@ -131,7 +139,6 @@ def test_decode_protocol_tool_request():
 @pytest.mark.parametrize(
     "content",
     [
-        "not json",
         '{"action":"tool","name":"exec","arguments":{}}',
         '{"action":"final","content":"ok","extra":true}',
         '{"action":"tool","name":"read_file","arguments":[],"extra":true}',
@@ -140,6 +147,13 @@ def test_decode_protocol_tool_request():
 def test_decode_protocol_rejects_malformed_or_unauthorized_actions(content):
     with pytest.raises(ValueError, match="KDvops"):
         decode_protocol_message({"content": content})
+
+
+def test_decode_protocol_treats_non_json_as_final_without_creating_tool_calls():
+    assert decode_protocol_message({"content": "not json"}) == {
+        "role": "assistant",
+        "content": "not json",
+    }
 
 
 @pytest.mark.parametrize(

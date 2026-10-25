@@ -21,8 +21,12 @@ def decode_protocol_message(message: dict) -> dict:
         raise TypeError("Invalid KDvops tool protocol response")
     try:
         action = json.loads(message["content"])
-    except json.JSONDecodeError as exc:
-        raise ValueError("Invalid KDvops tool protocol response: expected JSON") from exc
+    except json.JSONDecodeError:
+        # Newer Gateway versions no longer accept response_format. Models may
+        # therefore return a normal final answer instead of the requested JSON
+        # envelope. Treat non-JSON only as final text; tool execution remains
+        # possible exclusively through the strict JSON branch below.
+        return {"role": "assistant", "content": message["content"]}
     if not isinstance(action, dict) or action.get("action") not in {"tool", "final"}:
         raise ValueError("Invalid KDvops tool protocol response: unknown action")
     if action["action"] == "final":
