@@ -1,7 +1,9 @@
+import json
+
 import httpx
 import pytest
 
-from kdvops.agent import AgentClient
+from kdvops.agent import AgentClient, decode_protocol_message
 
 
 class Settings:
@@ -24,7 +26,9 @@ def client_returning(payload, status=200, content_type="application/json"):
 
 
 def test_complete_returns_message():
-    client = client_returning({"choices": [{"message": {"role": "assistant", "content": "hello"}}]})
+    client = client_returning(
+        {"choices": [{"message": {"role": "assistant", "content": '{"action":"final","content":"hello"}'}}]}
+    )
     assert client.complete([])["content"] == "hello"
 
 
@@ -33,14 +37,20 @@ def test_complete_sends_broker_and_cloudflare_access_headers():
 
     def handler(request):
         requests.append(request)
-        return httpx.Response(200, json={"choices": [{"message": {"content": "ok"}}]})
+        return httpx.Response(
+            200,
+            json={"choices": [{"message": {"content": '{"action":"final","content":"ok"}'}}]},
+        )
 
     AgentClient(Settings(), transport=httpx.MockTransport(handler)).complete([])
 
     assert requests[0].headers["Authorization"] == "Bearer test-token"
-    assert requests[0].headers["User-Agent"] == "kdvops-cli/0.2.0"
+    assert requests[0].headers["User-Agent"] == "kdvops-cli/0.3.0"
     assert requests[0].headers["CF-Access-Client-Id"] == "cf-client-id"
     assert requests[0].headers["CF-Access-Client-Secret"] == "cf-client-secret"
+    payload = json.loads(requests[0].content)
+    assert payload["response_format"] == {"type": "json_object"}
+    assert "tools" not in payload
 
 
 def test_complete_reuses_stable_conversation_id():
@@ -48,7 +58,10 @@ def test_complete_reuses_stable_conversation_id():
 
     def handler(request):
         requests.append(request)
-        return httpx.Response(200, json={"choices": [{"message": {"content": "ok"}}]})
+        return httpx.Response(
+            200,
+            json={"choices": [{"message": {"content": '{"action":"final","content":"ok"}'}}]},
+        )
 
     client = AgentClient(Settings(), transport=httpx.MockTransport(handler))
     client.complete([])
@@ -62,6 +75,42 @@ def test_complete_reuses_stable_conversation_id():
 def test_complete_rejects_invalid_protocol(payload):
     with pytest.raises((ValueError, TypeError), match="Invalid response"):
         client_returning(payload).complete([])
+
+
+def test_decode_protocol_tool_request():
+    message = decode_protocol_message(
+        {"content": '{"action":"tool","name":"read_file","arguments":{"path":"README.md"}}'}
+    )
+    assert message["tool_calls"][0]["function"]["name"] == "read_file"
+    assert json.loads(message["tool_calls"][0]["function"]["arguments"]) == {"path": "README.md"}
+
+
+@pytest.mark.parametrize(
+    "content",
+    [
+        "not json",
+        '{"action":"tool","name":"exec","arguments":{}}',
+        '{"action":"final","content":"ok","extra":true}',
+        '{"action":"tool","name":"read_file","arguments":[],"extra":true}',
+    ],
+)
+def test_decode_protocol_rejects_malformed_or_unauthorized_actions(content):
+    with pytest.raises(ValueError, match="KDvops"):
+        decode_protocol_message({"content": content})
+
+
+@pytest.mark.parametrize(
+    "content",
+    [
+        '{"action":"tool","name":"write_file","arguments":{"path":"a.txt","content":42}}',
+        '{"action":"tool","name":"read_file","arguments":{"path":false}}',
+        '{"action":"tool","name":"list_files","arguments":{"recursive":"yes"}}',
+        '{"action":"tool","name":"http_request","arguments":{"method":1,"url":"https://example.com"}}',
+    ],
+)
+def test_decode_protocol_rejects_invalid_argument_types(content):
+    with pytest.raises(ValueError, match="arguments"):
+        decode_protocol_message({"content": content})
 
 
 def test_probe_returns_openclaw_models():
@@ -79,7 +128,7 @@ def test_probe_sends_broker_and_cloudflare_access_headers():
     AgentClient(Settings(), transport=httpx.MockTransport(handler)).probe()
 
     assert requests[0].headers["Authorization"] == "Bearer test-token"
-    assert requests[0].headers["User-Agent"] == "kdvops-cli/0.2.0"
+    assert requests[0].headers["User-Agent"] == "kdvops-cli/0.3.0"
     assert requests[0].headers["CF-Access-Client-Id"] == "cf-client-id"
     assert requests[0].headers["CF-Access-Client-Secret"] == "cf-client-secret"
 

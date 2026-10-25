@@ -1,13 +1,69 @@
-"""OpenAI-compatible Chat Completions client; requires endpoint enabled on OpenClaw."""
+"""OpenAI-compatible client using a constrained JSON protocol for local tools."""
+import json
 from uuid import uuid4
 
 import httpx
 
 TOOLS = [
-    {"type": "function", "function": {"name": "list_files", "description": "List a directory in the mounted workspace", "parameters": {"type": "object", "properties": {"directory": {"type": "string"}}, "additionalProperties": False}}},
+    {"type": "function", "function": {"name": "list_files", "description": "List files in the mounted workspace", "parameters": {"type": "object", "properties": {"directory": {"type": "string"}, "recursive": {"type": "boolean"}}, "additionalProperties": False}}},
     {"type": "function", "function": {"name": "read_file", "description": "Read a UTF-8 text file from workspace", "parameters": {"type": "object", "properties": {"path": {"type": "string"}}, "required": ["path"], "additionalProperties": False}}},
     {"type": "function", "function": {"name": "write_file", "description": "Propose writing a UTF-8 text file; local user must approve", "parameters": {"type": "object", "properties": {"path": {"type": "string"}, "content": {"type": "string"}}, "required": ["path", "content"], "additionalProperties": False}}},
+    {"type": "function", "function": {"name": "http_request", "description": "Make an allowlisted HTTPS request; non-GET methods require local approval", "parameters": {"type": "object", "properties": {"method": {"type": "string"}, "url": {"type": "string"}, "json": {"type": ["object", "array", "string", "number", "boolean", "null"]}}, "required": ["method", "url"], "additionalProperties": False}}},
 ]
+TOOL_NAMES = {tool["function"]["name"] for tool in TOOLS}
+
+
+def decode_protocol_message(message: dict) -> dict:
+    """Convert the model's JSON action into the Chat Completions tool-call shape."""
+    if not isinstance(message, dict) or not isinstance(message.get("content"), str):
+        raise TypeError("Invalid KDvops tool protocol response")
+    try:
+        action = json.loads(message["content"])
+    except json.JSONDecodeError as exc:
+        raise ValueError("Invalid KDvops tool protocol response: expected JSON") from exc
+    if not isinstance(action, dict) or action.get("action") not in {"tool", "final"}:
+        raise ValueError("Invalid KDvops tool protocol response: unknown action")
+    if action["action"] == "final":
+        if set(action) != {"action", "content"} or not isinstance(action.get("content"), str):
+            raise ValueError("Invalid KDvops final response")
+        return {"role": "assistant", "content": action["content"]}
+
+    if set(action) != {"action", "name", "arguments"}:
+        raise ValueError("Invalid KDvops tool request")
+    name, arguments = action.get("name"), action.get("arguments")
+    if name not in TOOL_NAMES or not isinstance(arguments, dict):
+        raise ValueError("Invalid or unauthorized KDvops tool request")
+    validators = {
+        "list_files": lambda args: (
+            set(args) <= {"directory", "recursive"}
+            and isinstance(args.get("directory", "."), str)
+            and isinstance(args.get("recursive", False), bool)
+        ),
+        "read_file": lambda args: set(args) == {"path"} and isinstance(args.get("path"), str),
+        "write_file": lambda args: (
+            set(args) == {"path", "content"}
+            and isinstance(args.get("path"), str)
+            and isinstance(args.get("content"), str)
+        ),
+        "http_request": lambda args: (
+            {"method", "url"} <= set(args) <= {"method", "url", "json"}
+            and isinstance(args.get("method"), str)
+            and isinstance(args.get("url"), str)
+        ),
+    }
+    if not validators[name](arguments):
+        raise ValueError("Invalid KDvops tool arguments")
+    return {
+        "role": "assistant",
+        "content": None,
+        "tool_calls": [
+            {
+                "id": f"call-{uuid4()}",
+                "type": "function",
+                "function": {"name": name, "arguments": json.dumps(arguments, separators=(",", ":"))},
+            }
+        ],
+    }
 
 
 class AgentClient:
@@ -22,7 +78,7 @@ class AgentClient:
     def _headers(self) -> dict[str, str]:
         headers = {
             "Authorization": f"Bearer {self.settings.token}",
-            "User-Agent": "kdvops-cli/0.2.0",
+            "User-Agent": "kdvops-cli/0.3.0",
         }
         client_id = getattr(self.settings, "cf_access_client_id", "")
         client_secret = getattr(self.settings, "cf_access_client_secret", "")
@@ -55,7 +111,17 @@ class AgentClient:
     def complete(self, messages: list[dict]) -> dict:
         url = self.settings.endpoint + "/chat/completions"
         with self._client() as client:
-            response = client.post(url, headers=self._headers(), json={"model": self.settings.model, "user": self.conversation_id, "messages": messages, "tools": TOOLS, "tool_choice": "auto", "stream": False})
+            response = client.post(
+                url,
+                headers=self._headers(),
+                json={
+                    "model": self.settings.model,
+                    "user": self.conversation_id,
+                    "messages": messages,
+                    "response_format": {"type": "json_object"},
+                    "stream": False,
+                },
+            )
             response.raise_for_status()
             payload = response.json()
         try:
@@ -64,4 +130,4 @@ class AgentClient:
             raise ValueError("Invalid response from OpenClaw: missing choices[0].message") from exc
         if not isinstance(message, dict):
             raise TypeError("Invalid response from OpenClaw: message must be an object")
-        return message
+        return decode_protocol_message(message)

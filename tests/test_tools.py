@@ -1,4 +1,5 @@
 from kdvops.cli import MAX_DIFF_CHARS, execute_tool
+from kdvops.config import Settings
 from kdvops.workspace import Workspace
 
 
@@ -43,3 +44,22 @@ def test_list_read_and_unknown_tools(tmp_path):
 def test_invalid_tool_arguments_return_error(tmp_path):
     result = execute_tool(Workspace(tmp_path), "read_file", {})
     assert result.startswith("ERROR: KeyError")
+
+
+def test_non_get_http_requires_approval(tmp_path, monkeypatch):
+    cfg = Settings(
+        "https://gateway.example/v1",
+        "token",
+        "model",
+        tmp_path,
+        http_enabled=True,
+        http_allowed_hosts=("hooks.example.com",),
+    )
+    monkeypatch.setattr("kdvops.cli.Confirm.ask", lambda *a, **kw: False)
+    result = execute_tool(
+        Workspace(tmp_path),
+        "http_request",
+        {"method": "POST", "url": "https://hooks.example.com/event", "json": {"ok": True}},
+        cfg,
+    )
+    assert "DENIED" in result

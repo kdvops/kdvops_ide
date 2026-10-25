@@ -44,6 +44,7 @@ def valid_payload():
             }
         ],
         "tool_choice": "auto",
+        "response_format": {"type": "json_object"},
         "stream": False,
         "user": "kdvops:test",
     }
@@ -76,6 +77,19 @@ def test_sanitize_forces_agent_and_reconstructs_canonical_tool(config):
     assert tool["description"] != "malicious replacement"
     assert "path" in tool["parameters"]["properties"]
     assert result["stream"] is False
+
+
+def test_sanitize_requires_json_object_response_format(config):
+    payload = valid_payload()
+    assert sanitize_chat_request(payload, config)["response_format"] == {"type": "json_object"}
+
+    payload["response_format"] = {"type": "text"}
+    with pytest.raises(ValueError, match="required"):
+        sanitize_chat_request(payload, config)
+
+    del payload["response_format"]
+    with pytest.raises(ValueError, match="required"):
+        sanitize_chat_request(payload, config)
 
 
 @pytest.mark.parametrize("name", ["exec", "gateway", "session_status", "message"])

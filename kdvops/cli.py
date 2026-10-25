@@ -10,28 +10,41 @@ from rich.prompt import Confirm
 from .agent import AgentClient
 from .broker import BrokerConfig, serve
 from .config import Settings
+from .http_tool import request_https
 from .workspace import Workspace
 
 app = typer.Typer(help="KDvops CLI: supervised local coding with a remote OpenClaw agent")
 console = Console()
 MAX_DIFF_CHARS = 16_000
 
-SYSTEM = """You are a coding assistant. You can inspect and propose edits only through provided tools.
-All paths are relative to the mounted workspace. Never request secrets or access outside it.
-Write changes require explicit human approval. Do not claim a change was made unless the tool confirms it.
-Keep edits small and explain them. There is no shell execution tool."""
+SYSTEM = """You are a coding assistant controlling a local client through a strict JSON action protocol.
+You have no direct filesystem tools. To inspect or modify the mounted workspace, emit exactly one JSON
+object per turn, with no Markdown or surrounding text. Request one action at a time using one of:
+{"action":"tool","name":"list_files","arguments":{"directory":"."}}
+{"action":"tool","name":"list_files","arguments":{"directory":".","recursive":true}}
+{"action":"tool","name":"read_file","arguments":{"path":"relative/path"}}
+{"action":"tool","name":"write_file","arguments":{"path":"relative/path","content":"complete content"}}
+{"action":"tool","name":"http_request","arguments":{"method":"GET","url":"https://dev.azure.com/org/project/_apis/..."}}
+After receiving each tool result, request the next action or finish with:
+{"action":"final","content":"concise explanation of verified work"}
+All paths must be relative to the mounted workspace. Never request secrets, absolute paths, '..', shell,
+or tools other than those listed above. HTTP is HTTPS-only and restricted to locally configured hosts;
+non-GET requests and file writes require local human approval. Never claim an operation succeeded until
+the corresponding tool result confirms it. Keep edits small and reviewable."""
 
 
-def execute_tool(ws: Workspace, name: str, arguments: dict) -> str:
+def execute_tool(ws: Workspace, name: str, arguments: dict, settings: Settings | None = None) -> str:
     try:
         if name == "list_files":
-            return json.dumps(ws.list_files(arguments.get("directory", ".")), ensure_ascii=False)
+            return json.dumps(
+                ws.list_files(arguments.get("directory", "."), arguments.get("recursive", False)),
+                ensure_ascii=False,
+            )
         if name == "read_file":
             return ws.read_file(arguments["path"])
         if name == "write_file":
             path, content = arguments["path"], arguments["content"]
-            dest = ws.path(path)
-            old = ws.read_file(path) if dest.exists() else ""
+            old = ws.read_file(path) if ws.file_exists(path) else ""
             diff = "".join(difflib.unified_diff(old.splitlines(keepends=True), content.splitlines(keepends=True), fromfile=f"a/{path}", tofile=f"b/{path}"))
             if old == content:
                 return "No changes needed"
@@ -45,6 +58,14 @@ def execute_tool(ws: Workspace, name: str, arguments: dict) -> str:
                 return "DENIED by user; no changes applied"
             ws.write_file(path, content)
             return f"APPROVED and written: {path}"
+        if name == "http_request":
+            if settings is None:
+                raise ValueError("HTTP settings are unavailable")
+            method = str(arguments.get("method", "")).upper()
+            url = arguments.get("url", "")
+            if method != "GET" and not Confirm.ask(f"Allow {method} request to {url}?", default=False):
+                return "DENIED by user; HTTP request not sent"
+            return request_https(settings, method, url, arguments.get("json"))
         return "Unknown tool"
     except (ValueError, OSError, UnicodeError, KeyError) as exc:
         return f"ERROR: {type(exc).__name__}: {exc}"
@@ -91,7 +112,7 @@ def chat_loop(settings: Settings, once: str | None = None) -> None:
                 for call in calls:
                     try:
                         args = json.loads(call["function"]["arguments"])
-                        result = execute_tool(ws, call["function"]["name"], args)
+                        result = execute_tool(ws, call["function"]["name"], args, settings)
                     except (KeyError, ValueError, TypeError) as exc:
                         result = f"ERROR: Invalid tool call: {exc}"
                     messages.append({"role": "tool", "tool_call_id": call["id"], "content": result})

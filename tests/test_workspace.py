@@ -9,6 +9,36 @@ def test_read_write(tmp_path):
     assert ws.read_file("a.txt") == "hello"
 
 
+def test_recursive_listing_includes_nested_files(tmp_path):
+    (tmp_path / "src").mkdir()
+    (tmp_path / "src" / "app.py").write_text("print('ok')")
+    assert "src/app.py" in Workspace(tmp_path).list_files(recursive=True)
+
+
+def test_listing_hides_sensitive_names_by_default(tmp_path):
+    (tmp_path / ".env").write_text("SECRET=value")
+    (tmp_path / "deploy.key").write_text("key")
+    (tmp_path / "visible.txt").write_text("ok")
+    assert Workspace(tmp_path).list_files(recursive=True) == ["visible.txt"]
+
+
+def test_sensitive_directories_and_descendants_are_blocked(tmp_path):
+    (tmp_path / ".env").mkdir()
+    (tmp_path / ".env" / "token").write_text("SECRET")
+    ws = Workspace(tmp_path)
+
+    assert all(not item.startswith(".env") for item in ws.list_files(recursive=True))
+    with pytest.raises(ValueError, match="sensitive"):
+        ws.read_file(".env/token")
+
+
+def test_recursive_listing_stops_without_materializing_entire_tree(tmp_path, monkeypatch):
+    for index in range(1100):
+        (tmp_path / f"file-{index}.txt").write_text("x")
+
+    assert len(Workspace(tmp_path).list_files(recursive=True)) == 1000
+
+
 def test_reject_escape(tmp_path):
     ws = Workspace(tmp_path)
     for path in ("../outside", "/etc/passwd", "a/../../outside"):
@@ -67,3 +97,14 @@ def test_atomic_write_replaces_content_and_preserves_mode(tmp_path):
     assert target.read_text() == "new"
     assert target.stat().st_mode & 0o777 == 0o750
     assert not list(tmp_path.glob(".kdvops-*.tmp"))
+
+
+def test_write_rejects_symlinked_parent(tmp_path):
+    outside = tmp_path.parent / "outside-dir"
+    outside.mkdir(exist_ok=True)
+    (tmp_path / "linked").symlink_to(outside, target_is_directory=True)
+
+    with pytest.raises((ValueError, OSError)):
+        Workspace(tmp_path).write_file("linked/escaped.txt", "blocked")
+
+    assert not (outside / "escaped.txt").exists()

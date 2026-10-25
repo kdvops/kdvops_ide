@@ -214,7 +214,11 @@ def _canonicalize_tools(tools: Any) -> list[dict]:
 def sanitize_chat_request(payload: Any, config: BrokerConfig) -> dict:
     if not isinstance(payload, dict):
         raise TypeError("JSON body must be an object")
-    _exact_keys(payload, {"model", "messages", "tools", "tool_choice", "stream", "user"}, "request")
+    _exact_keys(
+        payload,
+        {"model", "messages", "tools", "tool_choice", "response_format", "stream", "user"},
+        "request",
+    )
     if payload.get("stream", False) is not False:
         raise ValueError("Streaming is not enabled on the restricted broker")
     messages = _validate_messages(payload.get("messages"))
@@ -239,6 +243,10 @@ def sanitize_chat_request(payload: Any, config: BrokerConfig) -> dict:
         "tool_choice": tool_choice,
         "stream": False,
     }
+    response_format = payload.get("response_format")
+    if response_format != {"type": "json_object"}:
+        raise ValueError("JSON object response format is required")
+    result["response_format"] = {"type": "json_object"}
     user = payload.get("user")
     if user is not None:
         if not isinstance(user, str) or not (0 < len(user) <= 128):

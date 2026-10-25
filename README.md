@@ -1,10 +1,12 @@
-# KDvops CLI · 0.2.0
+# KDvops CLI · 0.3.0
 
 Containerized, human-supervised coding CLI written in Python. The agent runs remotely on OpenClaw (Raspberry Pi 5 behind Cloudflare Tunnel), while local tools operate only on a Docker-mounted `/workspace`.
 
 ## Important compatibility requirement
 
-**This MVP uses OpenAI-compatible `POST /v1/chat/completions` with function/tool calling**, NOT the native OpenClaw Gateway WebSocket protocol. Your OpenClaw instance must explicitly enable and support that HTTP API and tool calls; a working web dashboard and Gateway token alone do not prove API availability. Check your installed OpenClaw version and Gateway configuration. If the endpoint rejects requests or doesn't return `tool_calls`, native Gateway integration is still an outstanding task in `specs/002-openclaw-integration`.
+**This MVP uses OpenAI-compatible `POST /v1/chat/completions` with a constrained JSON action protocol**, NOT the native OpenClaw Gateway WebSocket protocol. The model requests one of three local actions (`list_files`, `read_file`, or approval-gated `write_file`), and the CLI validates and executes it inside the mounted workspace. This works with OpenClaw's Codex/ChatGPT OAuth runtime, which does not transport client-provided function tools.
+
+Your OpenClaw instance must explicitly enable the HTTP API. A working web dashboard and Gateway token alone do not prove API availability. The restricted broker pins JSON-object responses and rejects unsupported request fields.
 
 Do not expose your token in tickets, logs, screenshots or git. Cloudflare Tunnel provides transport, not authorization. Restrict access using Cloudflare Access if possible; make sure machine clients are supported.
 
@@ -33,6 +35,20 @@ Single request:
 ```bash
 docker compose run --rm kdvops run "Explain this project and suggest improvements"
 ```
+
+Recursive file inspection and HTTPS APIs are available through constrained local actions. Network access is
+disabled by default; enable it only for exact hosts you trust:
+
+```env
+KDVOPS_HTTP_ENABLED=true
+KDVOPS_HTTP_ALLOWED_HOSTS=dev.azure.com,hooks.example.com
+AZURE_DEVOPS_PAT=<local-pat>
+```
+
+The PAT is injected only for `https://dev.azure.com` and is never included in the model-visible arguments.
+`GET` requests run after URL validation; `POST`, `PUT`, `PATCH`, and `DELETE` require local confirmation.
+Only HTTPS port 443 is accepted, redirects are not followed, proxy environment variables are ignored, and
+responses are capped at 1 MB. Add webhook hosts explicitly to `KDVOPS_HTTP_ALLOWED_HOSTS`.
 
 Status:
 
@@ -77,7 +93,7 @@ Restart the Gateway after changing its configuration. Treat its bearer token as 
 
 ## Restricted broker
 
-Production clients should connect to the restricted broker instead of receiving the Gateway operator token. The broker exposes only `GET /health`, authenticated `GET /v1/models`, and authenticated `POST /v1/chat/completions`. It pins requests to `openclaw/kdvops`, accepts only the three local workspace tools, rejects streaming and unknown fields, and applies body/rate limits.
+Production clients should connect to the restricted broker instead of receiving the Gateway operator token. The broker exposes only `GET /health`, authenticated `GET /v1/models`, and authenticated `POST /v1/chat/completions`. It pins requests to `openclaw/kdvops`, permits only the JSON-object response format used by the local action protocol, rejects streaming and unknown fields, and applies body/rate limits.
 
 Required server-side environment variables:
 
@@ -95,7 +111,7 @@ The broker has been deployed behind public HTTPS ingress and Cloudflare Access a
 ## Security and limitations
 
 - Docker bind-mounts the selected host directory as `/workspace:rw`. This is an actual write permission: Docker and the Python process can modify those files; human approval is enforced in application logic.
-- The CLI only exposes `list_files`, `read_file`, and approval-gated `write_file` to the remote agent. No arbitrary shell execution or remote host filesystem mounts.
+- The CLI exposes recursive `list_files`, `read_file`, approval-gated `write_file`, and allowlisted `http_request`. No arbitrary shell execution, arbitrary `curl`, or remote host filesystem mounts.
 - Common secret-bearing files (`.env*`, private keys, PEM/PFX files, kubeconfig and credentials files) are blocked from both reads and writes by default. Deliberate sessions can opt in separately with `KDVOPS_ALLOW_SENSITIVE_READS=true` or `KDVOPS_ALLOW_SENSITIVE_WRITES=true`; avoid doing so unless required.
 - Oversized diffs are rejected instead of being partially displayed. Split large changes into reviewable edits.
 - No automatic Git rollback, streaming, terminal execution, multi-file atomic transactions, or native Gateway pairing yet.

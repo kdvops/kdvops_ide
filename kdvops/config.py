@@ -14,6 +14,9 @@ class Settings:
     timeout: float = 300.0
     allow_sensitive_reads: bool = False
     allow_sensitive_writes: bool = False
+    http_enabled: bool = False
+    http_allowed_hosts: tuple[str, ...] = ()
+    azure_devops_pat: str = ""
 
     @classmethod
     def from_env(cls) -> "Settings":
@@ -30,6 +33,13 @@ class Settings:
         allow_sensitive_writes = os.getenv("KDVOPS_ALLOW_SENSITIVE_WRITES", "").strip().lower() in {
             "1", "true", "yes",
         }
+        http_enabled = os.getenv("KDVOPS_HTTP_ENABLED", "").strip().lower() in {"1", "true", "yes"}
+        http_allowed_hosts = tuple(
+            host.strip().lower()
+            for host in os.getenv("KDVOPS_HTTP_ALLOWED_HOSTS", "dev.azure.com").split(",")
+            if host.strip()
+        )
+        azure_devops_pat = os.getenv("AZURE_DEVOPS_PAT", "").strip()
         if not workspace.is_dir():
             raise ValueError("Workspace must be a directory")
         if not endpoint.startswith("https://") and not endpoint.startswith("http://127.0.0.1:"):
@@ -52,4 +62,7 @@ class Settings:
             timeout=timeout,
             allow_sensitive_reads=allow_sensitive_reads,
             allow_sensitive_writes=allow_sensitive_writes,
+            http_enabled=http_enabled,
+            http_allowed_hosts=http_allowed_hosts,
+            azure_devops_pat=azure_devops_pat,
         )

@@ -13,6 +13,9 @@ def test_settings_from_env(tmp_path, monkeypatch):
     monkeypatch.setenv("KDVOPS_WORKSPACE", str(tmp_path))
     monkeypatch.setenv("KDVOPS_ALLOW_SENSITIVE_READS", "true")
     monkeypatch.setenv("KDVOPS_ALLOW_SENSITIVE_WRITES", "yes")
+    monkeypatch.setenv("KDVOPS_HTTP_ENABLED", "true")
+    monkeypatch.setenv("KDVOPS_HTTP_ALLOWED_HOSTS", "dev.azure.com,hooks.example.com")
+    monkeypatch.setenv("AZURE_DEVOPS_PAT", "test-pat")
 
     settings = Settings.from_env()
 
@@ -23,6 +26,9 @@ def test_settings_from_env(tmp_path, monkeypatch):
     assert settings.cf_access_client_secret == "client-secret"
     assert settings.allow_sensitive_reads is True
     assert settings.allow_sensitive_writes is True
+    assert settings.http_enabled is True
+    assert settings.http_allowed_hosts == ("dev.azure.com", "hooks.example.com")
+    assert settings.azure_devops_pat == "test-pat"
 
 
 @pytest.mark.parametrize("url", ["http://example.test/v1", "ftp://example.test", ""])
