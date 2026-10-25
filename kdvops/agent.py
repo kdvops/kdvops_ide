@@ -4,6 +4,8 @@ from uuid import uuid4
 
 import httpx
 
+from .privacy import PrivacyFilter
+
 TOOLS = [
     {"type": "function", "function": {"name": "list_files", "description": "List files in the mounted workspace", "parameters": {"type": "object", "properties": {"directory": {"type": "string"}, "recursive": {"type": "boolean"}}, "additionalProperties": False}}},
     {"type": "function", "function": {"name": "read_file", "description": "Read a UTF-8 text file from workspace", "parameters": {"type": "object", "properties": {"path": {"type": "string"}}, "required": ["path"], "additionalProperties": False}}},
@@ -71,6 +73,16 @@ class AgentClient:
         self.settings = settings
         self.transport = transport
         self.conversation_id = f"kdvops:{uuid4()}"
+        self.privacy = PrivacyFilter(
+            (
+                getattr(settings, "token", ""),
+                getattr(settings, "cf_access_client_id", ""),
+                getattr(settings, "cf_access_client_secret", ""),
+                getattr(settings, "azure_devops_pat", ""),
+                *getattr(settings, "privacy_sensitive_values", ()),
+            ),
+            enabled=getattr(settings, "privacy_masking", True),
+        )
 
     def _client(self) -> httpx.Client:
         return httpx.Client(timeout=self.settings.timeout, follow_redirects=False, transport=self.transport)
@@ -78,7 +90,7 @@ class AgentClient:
     def _headers(self) -> dict[str, str]:
         headers = {
             "Authorization": f"Bearer {self.settings.token}",
-            "User-Agent": "kdvops-cli/0.3.0",
+            "User-Agent": "kdvops-cli/0.4.0",
         }
         client_id = getattr(self.settings, "cf_access_client_id", "")
         client_secret = getattr(self.settings, "cf_access_client_secret", "")
@@ -117,8 +129,7 @@ class AgentClient:
                 json={
                     "model": self.settings.model,
                     "user": self.conversation_id,
-                    "messages": messages,
-                    "response_format": {"type": "json_object"},
+                    "messages": self.privacy.mask(messages),
                     "stream": False,
                 },
             )
@@ -130,4 +141,7 @@ class AgentClient:
             raise ValueError("Invalid response from OpenClaw: missing choices[0].message") from exc
         if not isinstance(message, dict):
             raise TypeError("Invalid response from OpenClaw: message must be an object")
+        # Model output is untrusted. In particular, never restore privacy
+        # markers returned by the model: it saw those markers in the prompt and
+        # could replay one into a final response or a local/HTTP tool call.
         return decode_protocol_message(message)

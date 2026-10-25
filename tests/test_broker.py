@@ -79,17 +79,16 @@ def test_sanitize_forces_agent_and_reconstructs_canonical_tool(config):
     assert result["stream"] is False
 
 
-def test_sanitize_requires_json_object_response_format(config):
+def test_sanitize_accepts_legacy_json_object_response_format_without_forwarding(config):
     payload = valid_payload()
-    assert sanitize_chat_request(payload, config)["response_format"] == {"type": "json_object"}
+    assert "response_format" not in sanitize_chat_request(payload, config)
 
     payload["response_format"] = {"type": "text"}
-    with pytest.raises(ValueError, match="required"):
+    with pytest.raises(ValueError, match="Invalid"):
         sanitize_chat_request(payload, config)
 
     del payload["response_format"]
-    with pytest.raises(ValueError, match="required"):
-        sanitize_chat_request(payload, config)
+    assert "response_format" not in sanitize_chat_request(payload, config)
 
 
 @pytest.mark.parametrize("name", ["exec", "gateway", "session_status", "message"])

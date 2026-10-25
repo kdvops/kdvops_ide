@@ -45,11 +45,11 @@ def test_complete_sends_broker_and_cloudflare_access_headers():
     AgentClient(Settings(), transport=httpx.MockTransport(handler)).complete([])
 
     assert requests[0].headers["Authorization"] == "Bearer test-token"
-    assert requests[0].headers["User-Agent"] == "kdvops-cli/0.3.0"
+    assert requests[0].headers["User-Agent"] == "kdvops-cli/0.4.0"
     assert requests[0].headers["CF-Access-Client-Id"] == "cf-client-id"
     assert requests[0].headers["CF-Access-Client-Secret"] == "cf-client-secret"
     payload = json.loads(requests[0].content)
-    assert payload["response_format"] == {"type": "json_object"}
+    assert "response_format" not in payload
     assert "tools" not in payload
 
 
@@ -69,6 +69,49 @@ def test_complete_reuses_stable_conversation_id():
     bodies = [request.read().decode() for request in requests]
     assert client.conversation_id in bodies[0]
     assert client.conversation_id in bodies[1]
+
+
+def test_complete_masks_outbound_data_without_restoring_replayed_marker():
+    requests = []
+
+    def handler(request):
+        requests.append(request)
+        body = json.loads(request.content)
+        masked_email = body["messages"][0]["content"].split()[-1]
+        return httpx.Response(
+            200,
+            json={
+                "choices": [
+                    {"message": {"content": json.dumps({"action": "final", "content": masked_email})}}
+                ]
+            },
+        )
+
+    client = AgentClient(Settings(), transport=httpx.MockTransport(handler))
+    result = client.complete([{"role": "user", "content": "contact owner@example.com"}])
+
+    assert b"owner@example.com" not in requests[0].content
+    assert result["content"].startswith("__KDVOPS_MASK_")
+    assert result["content"] != "owner@example.com"
+
+
+def test_complete_never_restores_replayed_marker_in_tool_arguments():
+    def handler(request):
+        body = json.loads(request.content)
+        masked_email = body["messages"][0]["content"].split()[-1]
+        action = {
+            "action": "tool",
+            "name": "write_file",
+            "arguments": {"path": "owners.txt", "content": masked_email},
+        }
+        return httpx.Response(200, json={"choices": [{"message": {"content": json.dumps(action)}}]})
+
+    client = AgentClient(Settings(), transport=httpx.MockTransport(handler))
+    result = client.complete([{"role": "user", "content": "store owner@example.com"}])
+    arguments = json.loads(result["tool_calls"][0]["function"]["arguments"])
+
+    assert arguments["content"].startswith("__KDVOPS_MASK_")
+    assert arguments["content"] != "owner@example.com"
 
 
 @pytest.mark.parametrize("payload", [{}, {"choices": []}, {"choices": [{}]}, {"choices": [{"message": "bad"}]}])
@@ -128,7 +171,7 @@ def test_probe_sends_broker_and_cloudflare_access_headers():
     AgentClient(Settings(), transport=httpx.MockTransport(handler)).probe()
 
     assert requests[0].headers["Authorization"] == "Bearer test-token"
-    assert requests[0].headers["User-Agent"] == "kdvops-cli/0.3.0"
+    assert requests[0].headers["User-Agent"] == "kdvops-cli/0.4.0"
     assert requests[0].headers["CF-Access-Client-Id"] == "cf-client-id"
     assert requests[0].headers["CF-Access-Client-Secret"] == "cf-client-secret"
 

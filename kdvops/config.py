@@ -17,6 +17,8 @@ class Settings:
     http_enabled: bool = False
     http_allowed_hosts: tuple[str, ...] = ()
     azure_devops_pat: str = ""
+    privacy_masking: bool = True
+    privacy_sensitive_values: tuple[str, ...] = ()
 
     @classmethod
     def from_env(cls) -> "Settings":
@@ -40,6 +42,12 @@ class Settings:
             if host.strip()
         )
         azure_devops_pat = os.getenv("AZURE_DEVOPS_PAT", "").strip()
+        privacy_masking = os.getenv("KDVOPS_PRIVACY_MASKING", "true").strip().lower() not in {
+            "0", "false", "no",
+        }
+        privacy_sensitive_values = tuple(
+            value for value in os.getenv("KDVOPS_PRIVACY_SENSITIVE_VALUES", "").split("||") if value
+        )
         if not workspace.is_dir():
             raise ValueError("Workspace must be a directory")
         if not endpoint.startswith("https://") and not endpoint.startswith("http://127.0.0.1:"):
@@ -65,4 +73,6 @@ class Settings:
             http_enabled=http_enabled,
             http_allowed_hosts=http_allowed_hosts,
             azure_devops_pat=azure_devops_pat,
+            privacy_masking=privacy_masking,
+            privacy_sensitive_values=privacy_sensitive_values,
         )

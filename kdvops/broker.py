@@ -244,9 +244,8 @@ def sanitize_chat_request(payload: Any, config: BrokerConfig) -> dict:
         "stream": False,
     }
     response_format = payload.get("response_format")
-    if response_format != {"type": "json_object"}:
-        raise ValueError("JSON object response format is required")
-    result["response_format"] = {"type": "json_object"}
+    if response_format is not None and response_format != {"type": "json_object"}:
+        raise ValueError("Invalid response format")
     user = payload.get("user")
     if user is not None:
         if not isinstance(user, str) or not (0 < len(user) <= 128):
