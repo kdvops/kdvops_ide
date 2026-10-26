@@ -1,6 +1,10 @@
 import os
 from dataclasses import dataclass
 from pathlib import Path
+from urllib.parse import urlsplit
+
+
+INSECURE_TLS_ACKNOWLEDGEMENT = "I_UNDERSTAND_CREDENTIALS_CAN_BE_INTERCEPTED"
 
 
 @dataclass(frozen=True)
@@ -12,6 +16,7 @@ class Settings:
     cf_access_client_id: str = ""
     cf_access_client_secret: str = ""
     timeout: float = 300.0
+    tls_verify: bool = True
     allow_sensitive_reads: bool = False
     allow_sensitive_writes: bool = False
     http_enabled: bool = False
@@ -26,6 +31,15 @@ class Settings:
         token = os.getenv("OPENCLAW_TOKEN", "").strip()
         model = os.getenv("OPENCLAW_MODEL", "openclaw").strip()
         timeout = float(os.getenv("KDVOPS_TIMEOUT", "300"))
+        tls_verify = os.getenv("KDVOPS_TLS_VERIFY", "true").strip().lower() not in {
+            "0", "false", "no",
+        }
+        insecure_tls_ack = os.getenv("KDVOPS_INSECURE_TLS_ACK", "").strip()
+        insecure_tls_allowed_hosts = {
+            host.strip().lower()
+            for host in os.getenv("KDVOPS_INSECURE_TLS_ALLOWED_HOSTS", "").split(",")
+            if host.strip()
+        }
         workspace = Path(os.getenv("KDVOPS_WORKSPACE", "/workspace")).resolve(strict=True)
         cf_access_client_id = os.getenv("CF_ACCESS_CLIENT_ID", "").strip()
         cf_access_client_secret = os.getenv("CF_ACCESS_CLIENT_SECRET", "").strip()
@@ -60,6 +74,18 @@ class Settings:
             raise ValueError(
                 "CF_ACCESS_CLIENT_ID and CF_ACCESS_CLIENT_SECRET must be configured together"
             )
+        if not tls_verify:
+            endpoint_host = (urlsplit(endpoint).hostname or "").lower()
+            if insecure_tls_ack != INSECURE_TLS_ACKNOWLEDGEMENT:
+                raise ValueError(
+                    "Disabling TLS verification requires KDVOPS_INSECURE_TLS_ACK="
+                    f"{INSECURE_TLS_ACKNOWLEDGEMENT}"
+                )
+            if endpoint_host not in insecure_tls_allowed_hosts:
+                raise ValueError(
+                    "The endpoint hostname must be explicitly listed in "
+                    "KDVOPS_INSECURE_TLS_ALLOWED_HOSTS when TLS verification is disabled"
+                )
         return cls(
             endpoint,
             token,
@@ -68,6 +94,7 @@ class Settings:
             cf_access_client_id=cf_access_client_id,
             cf_access_client_secret=cf_access_client_secret,
             timeout=timeout,
+            tls_verify=tls_verify,
             allow_sensitive_reads=allow_sensitive_reads,
             allow_sensitive_writes=allow_sensitive_writes,
             http_enabled=http_enabled,

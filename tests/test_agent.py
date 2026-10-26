@@ -25,6 +25,22 @@ def client_returning(payload, status=200, content_type="application/json"):
     return AgentClient(Settings(), transport=transport)
 
 
+def test_client_passes_tls_verification_setting(monkeypatch):
+    captured = {}
+
+    def fake_client(**kwargs):
+        captured.update(kwargs)
+        return object()
+
+    settings = Settings()
+    settings.tls_verify = False
+    monkeypatch.setattr("kdvops.agent.httpx.Client", fake_client)
+
+    AgentClient(settings)._client()
+
+    assert captured["verify"] is False
+
+
 def test_complete_returns_message():
     client = client_returning(
         {"choices": [{"message": {"role": "assistant", "content": '{"action":"final","content":"hello"}'}}]}

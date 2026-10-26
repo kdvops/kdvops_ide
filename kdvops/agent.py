@@ -89,7 +89,12 @@ class AgentClient:
         )
 
     def _client(self) -> httpx.Client:
-        return httpx.Client(timeout=self.settings.timeout, follow_redirects=False, transport=self.transport)
+        return httpx.Client(
+            timeout=self.settings.timeout,
+            follow_redirects=False,
+            transport=self.transport,
+            verify=getattr(self.settings, "tls_verify", True),
+        )
 
     def _headers(self) -> dict[str, str]:
         headers = {

@@ -33,6 +33,16 @@ non-GET requests and file writes require local human approval. Never claim an op
 the corresponding tool result confirms it. Keep edits small and reviewable."""
 
 
+def load_settings() -> Settings:
+    settings = Settings.from_env()
+    if not settings.tls_verify:
+        console.print(
+            "[bold red]DANGER: TLS certificate verification is disabled.[/] "
+            "Credentials and traffic can be intercepted."
+        )
+    return settings
+
+
 def execute_tool(ws: Workspace, name: str, arguments: dict, settings: Settings | None = None) -> str:
     try:
         if name == "list_files":
@@ -130,7 +140,7 @@ def chat_loop(settings: Settings, once: str | None = None) -> None:
 def chat() -> None:
     """Start interactive coding assistant."""
     try:
-        chat_loop(Settings.from_env())
+        chat_loop(load_settings())
     except (ValueError, OSError) as exc:
         console.print(f"[red]Configuration error:[/] {exc}")
         raise typer.Exit(2)
@@ -140,7 +150,7 @@ def chat() -> None:
 def run(prompt: str) -> None:
     """Send a single instruction to the agent."""
     try:
-        chat_loop(Settings.from_env(), once=prompt)
+        chat_loop(load_settings(), once=prompt)
     except (ValueError, OSError) as exc:
         console.print(f"[red]Configuration error:[/] {exc}")
         raise typer.Exit(2)
@@ -150,7 +160,7 @@ def run(prompt: str) -> None:
 def status() -> None:
     """Show configuration without exposing token."""
     try:
-        cfg = Settings.from_env()
+        cfg = load_settings()
         console.print(f"Endpoint: {cfg.endpoint}\nModel: {cfg.model}\nWorkspace: {cfg.workspace}\nToken: configured")
     except (ValueError, OSError) as exc:
         console.print(f"[red]Configuration error:[/] {exc}")
@@ -161,7 +171,7 @@ def status() -> None:
 def doctor() -> None:
     """Verify Gateway connectivity and OpenAI-compatible API support."""
     try:
-        cfg = Settings.from_env()
+        cfg = load_settings()
         models = AgentClient(cfg).probe()
         console.print("[bold green]Gateway compatible[/]")
         console.print("Available agent targets: " + ", ".join(models), markup=False)

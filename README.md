@@ -75,6 +75,18 @@ The CLI sends these values as `CF-Access-Client-Id` and `CF-Access-Client-Secret
 
 `KDVOPS_TIMEOUT` controls the HTTP timeout in seconds and defaults to `300`, allowing enough time for gateway orchestration and cloud model responses.
 
+TLS certificate validation is enabled by default. If a workplace TLS-inspection proxy prevents the CLI
+from connecting and its CA certificate cannot be installed, it can be disabled explicitly:
+
+```env
+KDVOPS_TLS_VERIFY=false
+KDVOPS_INSECURE_TLS_ACK=I_UNDERSTAND_CREDENTIALS_CAN_BE_INTERCEPTED
+KDVOPS_INSECURE_TLS_ALLOWED_HOSTS=openclaw.example.com
+```
+
+Use this only as a temporary workaround on a trusted network. Disabling verification allows a
+man-in-the-middle to read the broker and Cloudflare Access credentials and all exchanged content.
+
 For OpenClaw 2026.7.1+, enable the API on a private/controlled ingress:
 
 ```json5
