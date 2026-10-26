@@ -92,8 +92,6 @@ from connecting and its CA certificate cannot be installed, it can be disabled e
 
 ```env
 KDVOPS_TLS_VERIFY=false
-KDVOPS_INSECURE_TLS_ACK=I_UNDERSTAND_CREDENTIALS_CAN_BE_INTERCEPTED
-KDVOPS_INSECURE_TLS_ALLOWED_HOSTS=openclaw.example.com
 ```
 
 Use this only as a temporary workaround on a trusted network. Disabling verification allows a

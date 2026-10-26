@@ -1,10 +1,6 @@
 import os
 from dataclasses import dataclass
 from pathlib import Path
-from urllib.parse import urlsplit
-
-
-INSECURE_TLS_ACKNOWLEDGEMENT = "I_UNDERSTAND_CREDENTIALS_CAN_BE_INTERCEPTED"
 
 
 @dataclass(frozen=True)
@@ -33,12 +29,6 @@ class Settings:
         timeout = float(os.getenv("KDVOPS_TIMEOUT", "300"))
         tls_verify = os.getenv("KDVOPS_TLS_VERIFY", "true").strip().lower() not in {
             "0", "false", "no",
-        }
-        insecure_tls_ack = os.getenv("KDVOPS_INSECURE_TLS_ACK", "").strip()
-        insecure_tls_allowed_hosts = {
-            host.strip().lower()
-            for host in os.getenv("KDVOPS_INSECURE_TLS_ALLOWED_HOSTS", "").split(",")
-            if host.strip()
         }
         workspace = Path(os.getenv("KDVOPS_WORKSPACE", "/workspace")).resolve(strict=True)
         cf_access_client_id = os.getenv("CF_ACCESS_CLIENT_ID", "").strip()
@@ -74,18 +64,6 @@ class Settings:
             raise ValueError(
                 "CF_ACCESS_CLIENT_ID and CF_ACCESS_CLIENT_SECRET must be configured together"
             )
-        if not tls_verify:
-            endpoint_host = (urlsplit(endpoint).hostname or "").lower()
-            if insecure_tls_ack != INSECURE_TLS_ACKNOWLEDGEMENT:
-                raise ValueError(
-                    "Disabling TLS verification requires KDVOPS_INSECURE_TLS_ACK="
-                    f"{INSECURE_TLS_ACKNOWLEDGEMENT}"
-                )
-            if endpoint_host not in insecure_tls_allowed_hosts:
-                raise ValueError(
-                    "The endpoint hostname must be explicitly listed in "
-                    "KDVOPS_INSECURE_TLS_ALLOWED_HOSTS when TLS verification is disabled"
-                )
         return cls(
             endpoint,
             token,
