@@ -4,6 +4,7 @@ services:
       context: .
       args:
         KDVOPS_UID: ${KDVOPS_UID:-10001}
+        KDVOPS_PIP_TRUSTED_HOST: ${KDVOPS_PIP_TRUSTED_HOST:-pypi.org files.pythonhosted.org}
     image: kdvops-cli:local
     stdin_open: true
     tty: true

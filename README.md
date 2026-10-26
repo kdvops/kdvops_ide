@@ -21,6 +21,18 @@ docker compose build
 docker compose run --rm kdvops chat
 ```
 
+The image build disables pip certificate validation for the Python package hosts by default so it can run
+behind workplace TLS-inspection proxies:
+
+```env
+KDVOPS_PIP_TRUSTED_HOST=pypi.org files.pythonhosted.org
+```
+
+Rebuild with `docker compose build --no-cache`. This affects dependency downloads during the build only;
+it does not disable TLS for the running CLI. `KDVOPS_PIP_TRUSTED_HOST` can be overridden with a
+space-separated host list if a different package index is used. TLS for pulling `python:3.12-slim` is
+controlled by the Docker daemon and cannot be disabled from this Dockerfile.
+
 Windows PowerShell:
 
 ```powershell
