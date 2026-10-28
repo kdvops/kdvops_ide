@@ -37,7 +37,8 @@ RUN apt-get update \
     && PIP_TRUSTED_HOST="${KDVOPS_PIP_TRUSTED_HOST}" \
        pip install --no-cache-dir -c constraints-dev.txt . \
     && useradd -u "${KDVOPS_UID}" -m kdvops \
-    && install -d -o kdvops -g kdvops -m 0700 /home/kdvops/.kube
+    && install -d -o kdvops -g kdvops -m 0700 /home/kdvops/.kube \
+    && install -d -o kdvops -g kdvops -m 0700 /home/kdvops/.local/share/kdvops
 USER kdvops
 WORKDIR /workspace
 ENTRYPOINT ["kdvops"]

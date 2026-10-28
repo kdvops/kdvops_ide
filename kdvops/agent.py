@@ -11,6 +11,7 @@ TOOLS = [
     {"type": "function", "function": {"name": "read_file", "description": "Read a UTF-8 text file from workspace", "parameters": {"type": "object", "properties": {"path": {"type": "string"}}, "required": ["path"], "additionalProperties": False}}},
     {"type": "function", "function": {"name": "write_file", "description": "Propose writing a UTF-8 text file; local user must approve", "parameters": {"type": "object", "properties": {"path": {"type": "string"}, "content": {"type": "string"}}, "required": ["path", "content"], "additionalProperties": False}}},
     {"type": "function", "function": {"name": "http_request", "description": "Make an allowlisted HTTPS request; non-GET methods require local approval", "parameters": {"type": "object", "properties": {"method": {"type": "string"}, "url": {"type": "string"}, "json": {"type": ["object", "array", "string", "number", "boolean", "null"]}}, "required": ["method", "url"], "additionalProperties": False}}},
+    {"type": "function", "function": {"name": "kubectl_read", "description": "Observe Kubernetes resources with a strictly read-only kubectl allowlist. Secrets, exec, mutation, interactive, watch, proxy, and credential override operations are blocked.", "parameters": {"type": "object", "properties": {"args": {"type": "array", "items": {"type": "string"}, "minItems": 1, "maxItems": 32}}, "required": ["args"], "additionalProperties": False}}},
 ]
 TOOL_NAMES = {tool["function"]["name"] for tool in TOOLS}
 
@@ -56,6 +57,12 @@ def decode_protocol_message(message: dict) -> dict:
             and isinstance(args.get("method"), str)
             and isinstance(args.get("url"), str)
         ),
+        "kubectl_read": lambda args: (
+            set(args) == {"args"}
+            and isinstance(args.get("args"), list)
+            and 1 <= len(args["args"]) <= 32
+            and all(isinstance(item, str) for item in args["args"])
+        ),
     }
     if not validators[name](arguments):
         raise ValueError("Invalid KDvops tool arguments")
@@ -73,10 +80,10 @@ def decode_protocol_message(message: dict) -> dict:
 
 
 class AgentClient:
-    def __init__(self, settings, transport=None):
+    def __init__(self, settings, transport=None, conversation_id: str | None = None):
         self.settings = settings
         self.transport = transport
-        self.conversation_id = f"kdvops:{uuid4()}"
+        self.conversation_id = conversation_id or f"kdvops:{uuid4()}"
         self.privacy = PrivacyFilter(
             (
                 getattr(settings, "token", ""),

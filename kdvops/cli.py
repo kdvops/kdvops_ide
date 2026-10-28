@@ -11,6 +11,7 @@ from .agent import AgentClient
 from .broker import BrokerConfig, serve
 from .config import Settings
 from .http_tool import request_https
+from .kubectl_tool import kubectl_read
 from .workspace import Workspace
 
 app = typer.Typer(help="KDvops CLI: supervised local coding with a remote OpenClaw agent")
@@ -25,10 +26,13 @@ object per turn, with no Markdown or surrounding text. Request one action at a t
 {"action":"tool","name":"read_file","arguments":{"path":"relative/path"}}
 {"action":"tool","name":"write_file","arguments":{"path":"relative/path","content":"complete content"}}
 {"action":"tool","name":"http_request","arguments":{"method":"GET","url":"https://dev.azure.com/org/project/_apis/..."}}
+{"action":"tool","name":"kubectl_read","arguments":{"args":["get","pods","--all-namespaces","-o","wide"]}}
 After receiving each tool result, request the next action or finish with:
 {"action":"final","content":"concise explanation of verified work"}
 All paths must be relative to the mounted workspace. Never request secrets, absolute paths, '..', shell,
-or tools other than those listed above. HTTP is HTTPS-only and restricted to locally configured hosts;
+or tools other than those listed above. kubectl_read is strictly for cluster observation and reporting:
+never request mutation, Secrets, exec, attach, cp, proxy, port-forward, credential overrides, or interactive
+operations. HTTP is HTTPS-only and restricted to locally configured hosts;
 non-GET requests and file writes require local human approval. Never claim an operation succeeded until
 the corresponding tool result confirms it. Keep edits small and reviewable."""
 
@@ -76,6 +80,8 @@ def execute_tool(ws: Workspace, name: str, arguments: dict, settings: Settings |
             if method != "GET" and not Confirm.ask(f"Allow {method} request to {url}?", default=False):
                 return "DENIED by user; HTTP request not sent"
             return request_https(settings, method, url, arguments.get("json"))
+        if name == "kubectl_read":
+            return kubectl_read(arguments["args"])
         return "Unknown tool"
     except (ValueError, OSError, UnicodeError, KeyError) as exc:
         return f"ERROR: {type(exc).__name__}: {exc}"
@@ -189,6 +195,18 @@ def broker() -> None:
         serve(BrokerConfig.from_env())
     except (ValueError, OSError) as exc:
         console.print(f"[red]Broker configuration error:[/] {exc}")
+        raise typer.Exit(2)
+
+
+@app.command()
+def web() -> None:
+    """Run the local browser chat interface with persistent conversations."""
+    try:
+        from .web import serve_web
+
+        serve_web(load_settings())
+    except (ValueError, OSError) as exc:
+        console.print(f"[red]Web configuration error:[/] {exc}")
         raise typer.Exit(2)
 
 

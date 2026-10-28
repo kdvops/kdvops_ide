@@ -63,3 +63,15 @@ def test_non_get_http_requires_approval(tmp_path, monkeypatch):
         cfg,
     )
     assert "DENIED" in result
+
+
+def test_kubectl_read_dispatches_to_read_only_runner(tmp_path, monkeypatch):
+    monkeypatch.setattr("kdvops.cli.kubectl_read", lambda args: "pod report")
+
+    result = execute_tool(
+        Workspace(tmp_path),
+        "kubectl_read",
+        {"args": ["get", "pods", "--all-namespaces"]},
+    )
+
+    assert result == "pod report"

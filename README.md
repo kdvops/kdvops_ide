@@ -21,6 +21,33 @@ docker compose build
 docker compose run --rm kdvops chat
 ```
 
+## Web chat with persistent history
+
+Start the browser interface at `http://localhost:8080`:
+
+```bash
+docker compose --profile web up --build kdvops-web
+```
+
+Set a unique random password of at least 32 characters before starting it:
+
+```env
+KDVOPS_WEB_TOKEN=replace-with-a-random-unique-value
+```
+
+The browser will request HTTP Basic credentials. Use `kdvops` as the username and the configured token
+as the password.
+
+The interface supports multiple conversations and persists their complete context in the
+`kdvops-history` Docker volume, so a chat can be reopened after restarting the container. Gateway,
+Cloudflare and Kubernetes credentials remain server-side and are never sent to the browser. Web mode
+allows the same read-only inspection actions as the CLI; approval-required file writes and non-GET HTTP
+requests are denied because there is no trusted terminal confirmation prompt in a browser session.
+
+Set `KDVOPS_WEB_PORT` in `.env` to publish a different host port. The service binds inside the container
+on port 8080 and Compose publishes it only on the host loopback interface (`127.0.0.1`).
+The service receives an explicit environment allowlist rather than inheriting every value from `.env`.
+
 The image includes `kubectl` and PowerShell 7 (`pwsh`). Set the host kubeconfig path in `.env`; Compose
 mounts it read-only and exports the in-container path through `KUBECONFIG`:
 
@@ -29,15 +56,34 @@ HOST_KUBECONFIG=/home/you/.kube/config
 ```
 
 On Windows Docker Desktop, use a Docker-accessible path such as
-`HOST_KUBECONFIG=C:/Users/you/.kube/config`. These programs are available for deliberate manual use with
-an overridden entrypoint; they are not exposed to the remote agent as command tools:
+`HOST_KUBECONFIG=C:/Users/you/.kube/config`. The remote agent can use the dedicated `kubectl_read` action
+to inspect cluster health and produce reports. It supports observation commands such as `get`, `describe`,
+`logs`, `top`, `events`, `api-resources`, `cluster-info`, `version`, `explain`, `auth can-i`, and
+`rollout status/history`.
+
+The action does not expose a shell. It rejects mutations, Kubernetes Secrets, interactive commands,
+`exec`, `attach`, `cp`, `proxy`, `port-forward`, watch/follow modes, external template files, alternate
+credentials, and API/server overrides. Commands have a 30-second timeout and bounded output. The kubectl
+subprocess receives a minimal environment rather than the OpenClaw, Cloudflare Access, and Azure DevOps
+credentials loaded by the main CLI.
+
+For defense in depth, use a dedicated static kubeconfig whose identity is restricted by Kubernetes RBAC
+to `get`, `list`, and `watch` only. Kubeconfigs containing `exec`, `auth-provider`, or `proxy-url` are
+rejected before every remote query. A read-only kubeconfig makes the API Server enforce the same policy even if a future
+client-side validation bug is discovered. Avoid using a cluster-admin kubeconfig for agent sessions.
+Exclude `secrets` and `configmaps` from the role, and scope access to only the namespaces and workload
+resources required for reporting. Pod specifications and application logs can themselves contain sensitive
+literal values, so do not grant access to workloads whose output should not be sent to the configured model.
+
+PowerShell and direct kubectl invocations remain available for deliberate manual use with the isolated
+tools profile:
 
 ```bash
 docker compose --profile tools run --rm kdvops-tools kubectl get nodes
 docker compose --profile tools run --rm kdvops-tools pwsh -NoProfile
 ```
 
-The tools profile deliberately does not load `.env`, so manual commands cannot inherit the OpenClaw,
+The tools profile deliberately does not load `.env` as its container environment, so manual commands cannot inherit the OpenClaw,
 Cloudflare Access, or Azure DevOps credentials used by the agent service.
 
 The image build disables pip certificate validation for the Python package hosts by default so it can run
@@ -152,7 +198,7 @@ The broker has been deployed behind public HTTPS ingress and Cloudflare Access a
 ## Security and limitations
 
 - Docker bind-mounts the selected host directory as `/workspace:rw`. This is an actual write permission: Docker and the Python process can modify those files; human approval is enforced in application logic.
-- The CLI exposes recursive `list_files`, `read_file`, approval-gated `write_file`, and allowlisted `http_request`. Bundled `kubectl` and `pwsh` are manual-only: the remote agent has no command execution action. There is no generic shell action, arbitrary `curl`, or remote host filesystem mount.
+- The CLI exposes recursive `list_files`, `read_file`, approval-gated `write_file`, allowlisted `http_request`, and strictly read-only `kubectl_read`. PowerShell remains manual-only. There is no generic shell action, arbitrary `curl`, remote host filesystem mount, Kubernetes Secret access, or cluster mutation action.
 - Common secret-bearing files (`.env*`, private keys, PEM/PFX files, kubeconfig and credentials files) are blocked from both reads and writes by default. Deliberate sessions can opt in separately with `KDVOPS_ALLOW_SENSITIVE_READS=true` or `KDVOPS_ALLOW_SENSITIVE_WRITES=true`; avoid doing so unless required.
 - Privacy masking is enabled by default. Before every LLM request, the local client replaces known credentials, private keys, JWTs, bearer tokens, secret assignments, email addresses, phone numbers, Azure PAT-shaped values, and private IP addresses with random session-scoped markers. Model output is untrusted, so returned markers are never converted back into sensitive values or expanded in tool arguments. Disable masking only with `KDVOPS_PRIVACY_MASKING=false`; add exact application-specific values with `KDVOPS_PRIVACY_SENSITIVE_VALUES=value1||value2`.
 - The masking map is memory-only and one-way from the model's perspective; it dies with the CLI process and is never persisted or sent to the broker. Pattern recognition is defense in depth, not a mathematical guarantee that arbitrary unknown sensitive data will always be recognized. Keep sensitive-file blocking enabled and avoid mounting unnecessary secrets.

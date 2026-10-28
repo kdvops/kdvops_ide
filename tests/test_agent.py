@@ -152,6 +152,22 @@ def test_decode_protocol_tool_request():
     assert json.loads(message["tool_calls"][0]["function"]["arguments"]) == {"path": "README.md"}
 
 
+def test_decode_protocol_accepts_read_only_kubectl_request():
+    message = decode_protocol_message(
+        {
+            "content": (
+                '{"action":"tool","name":"kubectl_read",'
+                '"arguments":{"args":["get","pods","--all-namespaces","-o","wide"]}}'
+            )
+        }
+    )
+
+    assert message["tool_calls"][0]["function"]["name"] == "kubectl_read"
+    assert json.loads(message["tool_calls"][0]["function"]["arguments"]) == {
+        "args": ["get", "pods", "--all-namespaces", "-o", "wide"]
+    }
+
+
 @pytest.mark.parametrize(
     "content",
     [
@@ -179,6 +195,8 @@ def test_decode_protocol_treats_non_json_as_final_without_creating_tool_calls():
         '{"action":"tool","name":"read_file","arguments":{"path":false}}',
         '{"action":"tool","name":"list_files","arguments":{"recursive":"yes"}}',
         '{"action":"tool","name":"http_request","arguments":{"method":1,"url":"https://example.com"}}',
+        '{"action":"tool","name":"kubectl_read","arguments":{"args":"get pods"}}',
+        '{"action":"tool","name":"kubectl_read","arguments":{"args":["get",1]}}',
     ],
 )
 def test_decode_protocol_rejects_invalid_argument_types(content):
