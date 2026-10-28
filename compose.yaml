@@ -24,3 +24,31 @@ services:
       - ALL
     pids_limit: 128
     mem_limit: 512m
+
+  kdvops-tools:
+    profiles: [tools]
+    build:
+      context: .
+      args:
+        KDVOPS_UID: ${KDVOPS_UID:-10001}
+        KDVOPS_PIP_TRUSTED_HOST: ${KDVOPS_PIP_TRUSTED_HOST:-pypi.org files.pythonhosted.org}
+    image: kdvops-cli:local
+    entrypoint: []
+    stdin_open: true
+    tty: true
+    init: true
+    environment:
+      KUBECONFIG: /home/kdvops/.kube/config
+    volumes:
+      - ${HOST_WORKSPACE:?Set HOST_WORKSPACE in .env}:/workspace:rw
+      - ${HOST_KUBECONFIG:?Set HOST_KUBECONFIG in .env}:/home/kdvops/.kube/config:ro
+    working_dir: /workspace
+    read_only: true
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,size=32m
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    pids_limit: 128
+    mem_limit: 512m

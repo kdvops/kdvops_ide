@@ -65,7 +65,7 @@ def request_https(settings, method: str, url: str, payload=None, transport=None,
     headers = {
         "Accept": "application/json",
         "Host": host,
-        "User-Agent": "kdvops-cli/0.3.0",
+        "User-Agent": "kdvops-cli/0.5.0",
     }
     if host == "dev.azure.com" and settings.azure_devops_pat:
         credential = base64.b64encode(f":{settings.azure_devops_pat}".encode()).decode()

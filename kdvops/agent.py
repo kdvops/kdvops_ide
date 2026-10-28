@@ -99,7 +99,7 @@ class AgentClient:
     def _headers(self) -> dict[str, str]:
         headers = {
             "Authorization": f"Bearer {self.settings.token}",
-            "User-Agent": "kdvops-cli/0.4.0",
+            "User-Agent": "kdvops-cli/0.5.0",
         }
         client_id = getattr(self.settings, "cf_access_client_id", "")
         client_secret = getattr(self.settings, "cf_access_client_secret", "")

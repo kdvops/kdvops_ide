@@ -1,4 +1,4 @@
-# KDvops CLI · 0.3.0
+# KDvops CLI · 0.5.0
 
 Containerized, human-supervised coding CLI written in Python. The agent runs remotely on OpenClaw (Raspberry Pi 5 behind Cloudflare Tunnel), while local tools operate only on a Docker-mounted `/workspace`.
 
@@ -20,6 +20,25 @@ cp .env.example .env
 docker compose build
 docker compose run --rm kdvops chat
 ```
+
+The image includes `kubectl` and PowerShell 7 (`pwsh`). Set the host kubeconfig path in `.env`; Compose
+mounts it read-only and exports the in-container path through `KUBECONFIG`:
+
+```env
+HOST_KUBECONFIG=/home/you/.kube/config
+```
+
+On Windows Docker Desktop, use a Docker-accessible path such as
+`HOST_KUBECONFIG=C:/Users/you/.kube/config`. These programs are available for deliberate manual use with
+an overridden entrypoint; they are not exposed to the remote agent as command tools:
+
+```bash
+docker compose --profile tools run --rm kdvops-tools kubectl get nodes
+docker compose --profile tools run --rm kdvops-tools pwsh -NoProfile
+```
+
+The tools profile deliberately does not load `.env`, so manual commands cannot inherit the OpenClaw,
+Cloudflare Access, or Azure DevOps credentials used by the agent service.
 
 The image build disables pip certificate validation for the Python package hosts by default so it can run
 behind workplace TLS-inspection proxies:
@@ -133,7 +152,7 @@ The broker has been deployed behind public HTTPS ingress and Cloudflare Access a
 ## Security and limitations
 
 - Docker bind-mounts the selected host directory as `/workspace:rw`. This is an actual write permission: Docker and the Python process can modify those files; human approval is enforced in application logic.
-- The CLI exposes recursive `list_files`, `read_file`, approval-gated `write_file`, and allowlisted `http_request`. No arbitrary shell execution, arbitrary `curl`, or remote host filesystem mounts.
+- The CLI exposes recursive `list_files`, `read_file`, approval-gated `write_file`, and allowlisted `http_request`. Bundled `kubectl` and `pwsh` are manual-only: the remote agent has no command execution action. There is no generic shell action, arbitrary `curl`, or remote host filesystem mount.
 - Common secret-bearing files (`.env*`, private keys, PEM/PFX files, kubeconfig and credentials files) are blocked from both reads and writes by default. Deliberate sessions can opt in separately with `KDVOPS_ALLOW_SENSITIVE_READS=true` or `KDVOPS_ALLOW_SENSITIVE_WRITES=true`; avoid doing so unless required.
 - Privacy masking is enabled by default. Before every LLM request, the local client replaces known credentials, private keys, JWTs, bearer tokens, secret assignments, email addresses, phone numbers, Azure PAT-shaped values, and private IP addresses with random session-scoped markers. Model output is untrusted, so returned markers are never converted back into sensitive values or expanded in tool arguments. Disable masking only with `KDVOPS_PRIVACY_MASKING=false`; add exact application-specific values with `KDVOPS_PRIVACY_SENSITIVE_VALUES=value1||value2`.
 - The masking map is memory-only and one-way from the model's perspective; it dies with the CLI process and is never persisted or sent to the broker. Pattern recognition is defense in depth, not a mathematical guarantee that arbitrary unknown sensitive data will always be recognized. Keep sensitive-file blocking enabled and avoid mounting unnecessary secrets.
