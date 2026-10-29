@@ -16,3 +16,4 @@ def test_web_profile_invokes_kdvops_web_subcommand():
     assert "command: [web]" in web
     assert "entrypoint: []" not in web
     assert "KDVOPS_MAX_TOOL_ITERATIONS" not in web
+    assert "KDVOPS_RUN_TIMEOUT: ${KDVOPS_RUN_TIMEOUT:-1800}" in web

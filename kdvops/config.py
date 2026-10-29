@@ -1,3 +1,4 @@
+import math
 import os
 from dataclasses import dataclass
 from pathlib import Path
@@ -62,8 +63,8 @@ class Settings:
             raise ValueError("OPENCLAW_TOKEN is required")
         if timeout <= 0:
             raise ValueError("KDVOPS_TIMEOUT must be greater than zero")
-        if run_timeout <= 0:
-            raise ValueError("KDVOPS_RUN_TIMEOUT must be greater than zero")
+        if not math.isfinite(run_timeout) or not 0 < run_timeout <= 86_400:
+            raise ValueError("KDVOPS_RUN_TIMEOUT must be finite and between 0 and 86400 seconds")
         if bool(cf_access_client_id) != bool(cf_access_client_secret):
             raise ValueError(
                 "CF_ACCESS_CLIENT_ID and CF_ACCESS_CLIENT_SECRET must be configured together"
