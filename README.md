@@ -29,6 +29,9 @@ Start the browser interface at `http://localhost:8080`:
 docker compose --profile web up --build kdvops-web
 ```
 
+Compose profiles are opt-in: plain `docker compose up` starts only the CLI service. To keep both optional
+services running, use `docker compose --profile web --profile tools up --build`.
+
 Set a unique random password of at least 32 characters before starting it:
 
 ```env
@@ -82,6 +85,10 @@ tools profile:
 docker compose --profile tools run --rm kdvops-tools kubectl get nodes
 docker compose --profile tools run --rm kdvops-tools pwsh -NoProfile
 ```
+
+The `tools` service uses `sleep infinity` only when started through `docker compose up`, so enabling the
+profile does not inherit the image's `chat` command after removing its entrypoint. A command supplied with
+`docker compose run` replaces that idle command, as shown above.
 
 The tools profile deliberately does not load `.env` as its container environment, so manual commands cannot inherit the OpenClaw,
 Cloudflare Access, or Azure DevOps credentials used by the agent service.
@@ -151,6 +158,10 @@ CF_ACCESS_CLIENT_SECRET=<service-token-client-secret>
 The CLI sends these values as `CF-Access-Client-Id` and `CF-Access-Client-Secret` on both model discovery and chat-completion requests. Both variables must be set together. They are separate from `OPENCLAW_TOKEN`, which authenticates to the broker after Cloudflare permits the request.
 
 `KDVOPS_TIMEOUT` controls the HTTP timeout in seconds and defaults to `300`, allowing enough time for gateway orchestration and cloud model responses.
+
+`KDVOPS_MAX_TOOL_ITERATIONS` controls how many agent/tool rounds a single request may use. It defaults
+to `30` and accepts values from `1` to `100`. Increase it for broad repository analysis, but keep a finite
+limit to stop accidental tool loops and unbounded model usage.
 
 TLS certificate validation is enabled by default. If a workplace TLS-inspection proxy prevents the CLI
 from connecting and its CA certificate cannot be installed, it can be disabled explicitly:
