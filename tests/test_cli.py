@@ -1,4 +1,6 @@
 import httpx
+import pytest
+import typer
 from typer.testing import CliRunner
 
 from kdvops.cli import app, chat_loop
@@ -98,7 +100,10 @@ def test_once_mode_does_not_cap_tool_cycles(tmp_path, monkeypatch):
             "tool_calls": [
                 {
                     "id": f"call-{calls}",
-                    "function": {"name": "list_files", "arguments": "{}"},
+                    "function": {
+                        "name": "list_files",
+                        "arguments": '{"directory":"round-%d"}' % calls,
+                    },
                 }
             ],
         }
@@ -109,6 +114,32 @@ def test_once_mode_does_not_cap_tool_cycles(tmp_path, monkeypatch):
     chat_loop(settings, once="inspect")
 
     assert calls == 102
+
+
+def test_once_mode_stops_repeated_tool_cycle(tmp_path, monkeypatch):
+    calls = 0
+
+    def complete(self, messages):
+        nonlocal calls
+        calls += 1
+        return {
+            "role": "assistant",
+            "content": None,
+            "tool_calls": [
+                {
+                    "id": f"call-{calls}",
+                    "function": {"name": "list_files", "arguments": "{}"},
+                }
+            ],
+        }
+
+    monkeypatch.setattr("kdvops.cli.AgentClient.complete", complete)
+    settings = Settings("https://example.test/v1", "token", "model", tmp_path)
+
+    with pytest.raises(typer.Exit):
+        chat_loop(settings, once="inspect")
+
+    assert calls == 5
 
 
 def test_run_returns_one_on_connection_error(tmp_path, monkeypatch):

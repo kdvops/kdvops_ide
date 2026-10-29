@@ -80,6 +80,16 @@ def test_settings_requires_positive_timeout(tmp_path, monkeypatch):
         Settings.from_env()
 
 
+def test_settings_requires_positive_run_timeout(tmp_path, monkeypatch):
+    monkeypatch.setenv("OPENCLAW_API_URL", "https://example.test/v1")
+    monkeypatch.setenv("OPENCLAW_TOKEN", "token")
+    monkeypatch.setenv("KDVOPS_WORKSPACE", str(tmp_path))
+    monkeypatch.setenv("KDVOPS_RUN_TIMEOUT", "0")
+
+    with pytest.raises(ValueError, match="KDVOPS_RUN_TIMEOUT"):
+        Settings.from_env()
+
+
 @pytest.mark.parametrize(
     ("client_id", "client_secret"),
     [("client-id", ""), ("", "client-secret")],

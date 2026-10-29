@@ -17,7 +17,7 @@ import httpx
 import uvicorn
 
 from .agent import AgentClient
-from .cli import SYSTEM, execute_tool
+from .cli import SYSTEM, check_repeated_tool_round, execute_tool
 from .workspace import Workspace
 
 MAX_REQUEST_BYTES = 32_768
@@ -226,23 +226,29 @@ class WebApp:
             agent = self.agent_factory(self.settings, conversation_id=f"kdvops-web:{conversation_id}")
             added = []
             try:
-                while True:
-                    reply = await asyncio.to_thread(agent.complete, messages)
-                    messages.append(reply); added.append(reply)
-                    calls = reply.get("tool_calls") or []
-                    if not calls:
-                        self.store.append(conversation_id, added)
-                        return await self._json(send, 200, {"message": reply.get("content") or ""})
-                    for call in calls:
-                        name = call["function"]["name"]
-                        args = json.loads(call["function"]["arguments"])
-                        if name in {"write_file", "http_request"} and (name == "write_file" or str(args.get("method", "GET")).upper() != "GET"):
-                            result = "DENIED: approval-required actions are unavailable in web mode"
-                        else:
-                            result = await asyncio.to_thread(execute_tool, self.workspace, name, args, self.settings)
-                        tool_message = {"role": "tool", "tool_call_id": call["id"], "content": result}
-                        messages.append(tool_message); added.append(tool_message)
-            except (httpx.HTTPError, KeyError, ValueError, TypeError) as exc:
+                previous_round = None
+                repeated_rounds = 0
+                async with asyncio.timeout(self.settings.run_timeout):
+                    while True:
+                        reply = await asyncio.to_thread(agent.complete, messages)
+                        messages.append(reply); added.append(reply)
+                        calls = reply.get("tool_calls") or []
+                        if not calls:
+                            self.store.append(conversation_id, added)
+                            return await self._json(send, 200, {"message": reply.get("content") or ""})
+                        previous_round, repeated_rounds = check_repeated_tool_round(
+                            calls, previous_round, repeated_rounds
+                        )
+                        for call in calls:
+                            name = call["function"]["name"]
+                            args = json.loads(call["function"]["arguments"])
+                            if name in {"write_file", "http_request"} and (name == "write_file" or str(args.get("method", "GET")).upper() != "GET"):
+                                result = "DENIED: approval-required actions are unavailable in web mode"
+                            else:
+                                result = await asyncio.to_thread(execute_tool, self.workspace, name, args, self.settings)
+                            tool_message = {"role": "tool", "tool_call_id": call["id"], "content": result}
+                            messages.append(tool_message); added.append(tool_message)
+            except (httpx.HTTPError, KeyError, ValueError, TypeError, RuntimeError, TimeoutError) as exc:
                 if added:
                     self.store.append(conversation_id, added)
                 return await self._json(send, 502, {"error": f"Agent error: {type(exc).__name__}: {exc}"})

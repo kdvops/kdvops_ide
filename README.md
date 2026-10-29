@@ -158,9 +158,10 @@ CF_ACCESS_CLIENT_SECRET=<service-token-client-secret>
 The CLI sends these values as `CF-Access-Client-Id` and `CF-Access-Client-Secret` on both model discovery and chat-completion requests. Both variables must be set together. They are separate from `OPENCLAW_TOKEN`, which authenticates to the broker after Cloudflare permits the request.
 
 `KDVOPS_TIMEOUT` controls the HTTP timeout in seconds and defaults to `300`, allowing enough time for gateway orchestration and cloud model responses.
+`KDVOPS_RUN_TIMEOUT` controls the total deadline for one agent run and defaults to `1800` seconds.
 
 Agent/tool rounds are not capped. A request continues until the model returns a response without tool
-calls, the HTTP timeout is reached, or the user stops the process.
+calls, the total run deadline is reached, a repeated tool cycle is detected, or the user stops the process.
 
 TLS certificate validation is enabled by default. If a workplace TLS-inspection proxy prevents the CLI
 from connecting and its CA certificate cannot be installed, it can be disabled explicitly:

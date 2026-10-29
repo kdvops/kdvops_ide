@@ -1,5 +1,6 @@
 import difflib
 import json
+import time
 
 import httpx
 import typer
@@ -17,6 +18,7 @@ from .workspace import Workspace
 app = typer.Typer(help="KDvops CLI: supervised local coding with a remote OpenClaw agent")
 console = Console()
 MAX_DIFF_CHARS = 16_000
+MAX_REPEATED_TOOL_ROUNDS = 5
 
 SYSTEM = """You are a coding assistant controlling a local client through a strict JSON action protocol.
 You have no direct filesystem tools. To inspect or modify the mounted workspace, emit exactly one JSON
@@ -87,6 +89,28 @@ def execute_tool(ws: Workspace, name: str, arguments: dict, settings: Settings |
         return f"ERROR: {type(exc).__name__}: {exc}"
 
 
+def tool_round_fingerprint(calls: list[dict]) -> str:
+    """Return a stable fingerprint for detecting an agent stuck on the same tool round."""
+    normalized = []
+    for call in calls:
+        function = call.get("function") or {}
+        arguments = function.get("arguments", "")
+        try:
+            arguments = json.dumps(json.loads(arguments), sort_keys=True, separators=(",", ":"))
+        except (json.JSONDecodeError, TypeError):
+            arguments = str(arguments)
+        normalized.append((function.get("name"), arguments))
+    return json.dumps(normalized, separators=(",", ":"))
+
+
+def check_repeated_tool_round(calls: list[dict], previous: str | None, repeats: int) -> tuple[str, int]:
+    fingerprint = tool_round_fingerprint(calls)
+    repeats = repeats + 1 if fingerprint == previous else 1
+    if repeats >= MAX_REPEATED_TOOL_ROUNDS:
+        raise RuntimeError(f"Agent stopped after repeating the same tool round {repeats} times")
+    return fingerprint, repeats
+
+
 def chat_loop(settings: Settings, once: str | None = None) -> None:
     ws = Workspace(
         settings.workspace,
@@ -118,13 +142,23 @@ def chat_loop(settings: Settings, once: str | None = None) -> None:
             continue
         messages.append({"role": "user", "content": prompt})
         try:
+            deadline = time.monotonic() + settings.run_timeout
+            previous_round = None
+            repeated_rounds = 0
             while True:
+                if time.monotonic() >= deadline:
+                    raise TimeoutError(
+                        f"Agent run exceeded the {settings.run_timeout:g}-second deadline"
+                    )
                 reply = agent.complete(messages)
                 messages.append(reply)
                 calls = reply.get("tool_calls") or []
                 if not calls:
                     console.print(Panel(reply.get("content") or "(empty response)", title="OpenClaw"))
                     break
+                previous_round, repeated_rounds = check_repeated_tool_round(
+                    calls, previous_round, repeated_rounds
+                )
                 for call in calls:
                     try:
                         args = json.loads(call["function"]["arguments"])
@@ -132,7 +166,7 @@ def chat_loop(settings: Settings, once: str | None = None) -> None:
                     except (KeyError, ValueError, TypeError) as exc:
                         result = f"ERROR: Invalid tool call: {exc}"
                     messages.append({"role": "tool", "tool_call_id": call["id"], "content": result})
-        except (httpx.HTTPError, ValueError, KeyError, TypeError) as exc:
+        except (httpx.HTTPError, ValueError, KeyError, TypeError, RuntimeError, TimeoutError) as exc:
             console.print(f"[red]Connection or protocol error:[/] {type(exc).__name__}: {exc}")
             if once is not None:
                 raise typer.Exit(1)
@@ -167,7 +201,7 @@ def status() -> None:
         cfg = load_settings()
         console.print(
             f"Endpoint: {cfg.endpoint}\nModel: {cfg.model}\nWorkspace: {cfg.workspace}\n"
-            "Tool iterations: unlimited\nToken: configured"
+            f"Tool iterations: unlimited\nRun deadline: {cfg.run_timeout:g}s\nToken: configured"
         )
     except (ValueError, OSError) as exc:
         console.print(f"[red]Configuration error:[/] {exc}")
