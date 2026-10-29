@@ -159,9 +159,8 @@ The CLI sends these values as `CF-Access-Client-Id` and `CF-Access-Client-Secret
 
 `KDVOPS_TIMEOUT` controls the HTTP timeout in seconds and defaults to `300`, allowing enough time for gateway orchestration and cloud model responses.
 
-`KDVOPS_MAX_TOOL_ITERATIONS` controls how many agent/tool rounds a single request may use. It defaults
-to `30` and accepts values from `1` to `100`. Increase it for broad repository analysis, but keep a finite
-limit to stop accidental tool loops and unbounded model usage.
+Agent/tool rounds are not capped. A request continues until the model returns a response without tool
+calls, the HTTP timeout is reached, or the user stops the process.
 
 TLS certificate validation is enabled by default. If a workplace TLS-inspection proxy prevents the CLI
 from connecting and its CA certificate cannot be installed, it can be disabled explicitly:

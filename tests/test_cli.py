@@ -19,6 +19,7 @@ def test_status_hides_token(tmp_path):
     )
     assert result.exit_code == 0
     assert "configured" in result.output
+    assert "Tool iterations: unlimited" in result.output
     assert "super-secret" not in result.output
 
 
@@ -81,6 +82,33 @@ def test_once_mode_executes_tool_cycle(tmp_path, monkeypatch):
     monkeypatch.setattr("kdvops.cli.AgentClient.complete", lambda self, messages: next(replies))
     settings = Settings("https://example.test/v1", "token", "model", tmp_path)
     chat_loop(settings, once="inspect")
+
+
+def test_once_mode_does_not_cap_tool_cycles(tmp_path, monkeypatch):
+    calls = 0
+
+    def complete(self, messages):
+        nonlocal calls
+        calls += 1
+        if calls > 101:
+            return {"role": "assistant", "content": "done"}
+        return {
+            "role": "assistant",
+            "content": None,
+            "tool_calls": [
+                {
+                    "id": f"call-{calls}",
+                    "function": {"name": "list_files", "arguments": "{}"},
+                }
+            ],
+        }
+
+    monkeypatch.setattr("kdvops.cli.AgentClient.complete", complete)
+    settings = Settings("https://example.test/v1", "token", "model", tmp_path)
+
+    chat_loop(settings, once="inspect")
+
+    assert calls == 102
 
 
 def test_run_returns_one_on_connection_error(tmp_path, monkeypatch):

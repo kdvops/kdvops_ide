@@ -12,7 +12,6 @@ class Settings:
     cf_access_client_id: str = ""
     cf_access_client_secret: str = ""
     timeout: float = 300.0
-    max_tool_iterations: int = 30
     tls_verify: bool = True
     allow_sensitive_reads: bool = False
     allow_sensitive_writes: bool = False
@@ -28,7 +27,6 @@ class Settings:
         token = os.getenv("OPENCLAW_TOKEN", "").strip()
         model = os.getenv("OPENCLAW_MODEL", "openclaw").strip()
         timeout = float(os.getenv("KDVOPS_TIMEOUT", "300"))
-        max_tool_iterations = int(os.getenv("KDVOPS_MAX_TOOL_ITERATIONS", "30"))
         tls_verify = os.getenv("KDVOPS_TLS_VERIFY", "true").strip().lower() not in {
             "0", "false", "no",
         }
@@ -62,8 +60,6 @@ class Settings:
             raise ValueError("OPENCLAW_TOKEN is required")
         if timeout <= 0:
             raise ValueError("KDVOPS_TIMEOUT must be greater than zero")
-        if not 1 <= max_tool_iterations <= 100:
-            raise ValueError("KDVOPS_MAX_TOOL_ITERATIONS must be between 1 and 100")
         if bool(cf_access_client_id) != bool(cf_access_client_secret):
             raise ValueError(
                 "CF_ACCESS_CLIENT_ID and CF_ACCESS_CLIENT_SECRET must be configured together"
@@ -76,7 +72,6 @@ class Settings:
             cf_access_client_id=cf_access_client_id,
             cf_access_client_secret=cf_access_client_secret,
             timeout=timeout,
-            max_tool_iterations=max_tool_iterations,
             tls_verify=tls_verify,
             allow_sensitive_reads=allow_sensitive_reads,
             allow_sensitive_writes=allow_sensitive_writes,

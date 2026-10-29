@@ -226,7 +226,7 @@ class WebApp:
             agent = self.agent_factory(self.settings, conversation_id=f"kdvops-web:{conversation_id}")
             added = []
             try:
-                for _ in range(self.settings.max_tool_iterations):
+                while True:
                     reply = await asyncio.to_thread(agent.complete, messages)
                     messages.append(reply); added.append(reply)
                     calls = reply.get("tool_calls") or []
@@ -242,10 +242,6 @@ class WebApp:
                             result = await asyncio.to_thread(execute_tool, self.workspace, name, args, self.settings)
                         tool_message = {"role": "tool", "tool_call_id": call["id"], "content": result}
                         messages.append(tool_message); added.append(tool_message)
-                raise ValueError(
-                    "Tool iteration limit reached "
-                    f"({self.settings.max_tool_iterations})"
-                )
             except (httpx.HTTPError, KeyError, ValueError, TypeError) as exc:
                 if added:
                     self.store.append(conversation_id, added)

@@ -118,7 +118,7 @@ def chat_loop(settings: Settings, once: str | None = None) -> None:
             continue
         messages.append({"role": "user", "content": prompt})
         try:
-            for _ in range(settings.max_tool_iterations):
+            while True:
                 reply = agent.complete(messages)
                 messages.append(reply)
                 calls = reply.get("tool_calls") or []
@@ -132,11 +132,6 @@ def chat_loop(settings: Settings, once: str | None = None) -> None:
                     except (KeyError, ValueError, TypeError) as exc:
                         result = f"ERROR: Invalid tool call: {exc}"
                     messages.append({"role": "tool", "tool_call_id": call["id"], "content": result})
-            else:
-                console.print(
-                    f"[yellow]Tool iteration limit reached "
-                    f"({settings.max_tool_iterations})[/]"
-                )
         except (httpx.HTTPError, ValueError, KeyError, TypeError) as exc:
             console.print(f"[red]Connection or protocol error:[/] {type(exc).__name__}: {exc}")
             if once is not None:
@@ -172,7 +167,7 @@ def status() -> None:
         cfg = load_settings()
         console.print(
             f"Endpoint: {cfg.endpoint}\nModel: {cfg.model}\nWorkspace: {cfg.workspace}\n"
-            f"Max tool iterations: {cfg.max_tool_iterations}\nToken: configured"
+            "Tool iterations: unlimited\nToken: configured"
         )
     except (ValueError, OSError) as exc:
         console.print(f"[red]Configuration error:[/] {exc}")

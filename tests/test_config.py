@@ -8,7 +8,6 @@ def test_settings_from_env(tmp_path, monkeypatch):
     monkeypatch.setenv("OPENCLAW_TOKEN", "token")
     monkeypatch.setenv("OPENCLAW_MODEL", "model")
     monkeypatch.setenv("KDVOPS_TIMEOUT", "123")
-    monkeypatch.setenv("KDVOPS_MAX_TOOL_ITERATIONS", "42")
     monkeypatch.setenv("KDVOPS_TLS_VERIFY", "false")
     monkeypatch.setenv("CF_ACCESS_CLIENT_ID", "client-id")
     monkeypatch.setenv("CF_ACCESS_CLIENT_SECRET", "client-secret")
@@ -24,7 +23,6 @@ def test_settings_from_env(tmp_path, monkeypatch):
     assert settings.endpoint == "https://example.test/v1"
     assert settings.workspace == tmp_path
     assert settings.timeout == 123
-    assert settings.max_tool_iterations == 42
     assert settings.tls_verify is False
     assert settings.cf_access_client_id == "client-id"
     assert settings.cf_access_client_secret == "client-secret"
@@ -44,7 +42,6 @@ def test_settings_verifies_tls_by_default(tmp_path, monkeypatch):
     settings = Settings.from_env()
 
     assert settings.tls_verify is True
-    assert settings.max_tool_iterations == 30
 
 
 def test_settings_allows_tls_bypass_without_additional_guards(tmp_path, monkeypatch):
@@ -80,17 +77,6 @@ def test_settings_requires_positive_timeout(tmp_path, monkeypatch):
     monkeypatch.setenv("KDVOPS_TIMEOUT", "0")
 
     with pytest.raises(ValueError, match="KDVOPS_TIMEOUT"):
-        Settings.from_env()
-
-
-@pytest.mark.parametrize("value", ["0", "101", "-1"])
-def test_settings_rejects_unsafe_tool_iteration_limit(tmp_path, monkeypatch, value):
-    monkeypatch.setenv("OPENCLAW_API_URL", "https://example.test/v1")
-    monkeypatch.setenv("OPENCLAW_TOKEN", "token")
-    monkeypatch.setenv("KDVOPS_WORKSPACE", str(tmp_path))
-    monkeypatch.setenv("KDVOPS_MAX_TOOL_ITERATIONS", value)
-
-    with pytest.raises(ValueError, match="KDVOPS_MAX_TOOL_ITERATIONS"):
         Settings.from_env()
 
 
