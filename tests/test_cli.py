@@ -102,7 +102,7 @@ def test_once_mode_does_not_cap_tool_cycles(tmp_path, monkeypatch):
                     "id": f"call-{calls}",
                     "function": {
                         "name": "list_files",
-                        "arguments": '{"directory":"round-%d"}' % calls,
+                        "arguments": f'{{"directory":"round-{calls}"}}',
                     },
                 }
             ],
