@@ -21,36 +21,6 @@ docker compose build
 docker compose run --rm kdvops chat
 ```
 
-## Web chat with persistent history
-
-Start the browser interface at `http://localhost:8080`:
-
-```bash
-docker compose --profile web up --build kdvops-web
-```
-
-Compose profiles are opt-in: plain `docker compose up` starts only the CLI service. To keep both optional
-services running, use `docker compose --profile web --profile tools up --build`.
-
-Set a unique random password of at least 32 characters before starting it:
-
-```env
-KDVOPS_WEB_TOKEN=replace-with-a-random-unique-value
-```
-
-The browser will request HTTP Basic credentials. Use `kdvops` as the username and the configured token
-as the password.
-
-The interface supports multiple conversations and persists their complete context in the
-`kdvops-history` Docker volume, so a chat can be reopened after restarting the container. Gateway,
-Cloudflare and Kubernetes credentials remain server-side and are never sent to the browser. Web mode
-allows the same read-only inspection actions as the CLI; approval-required file writes and non-GET HTTP
-requests are denied because there is no trusted terminal confirmation prompt in a browser session.
-
-Set `KDVOPS_WEB_PORT` in `.env` to publish a different host port. The service binds inside the container
-on port 8080 and Compose publishes it only on the host loopback interface (`127.0.0.1`).
-The service receives an explicit environment allowlist rather than inheriting every value from `.env`.
-
 The image includes `kubectl` and PowerShell 7 (`pwsh`). Set the host kubeconfig path in `.env`; Compose
 mounts it read-only and exports the in-container path through `KUBECONFIG`:
 
@@ -77,21 +47,6 @@ client-side validation bug is discovered. Avoid using a cluster-admin kubeconfig
 Exclude `secrets` and `configmaps` from the role, and scope access to only the namespaces and workload
 resources required for reporting. Pod specifications and application logs can themselves contain sensitive
 literal values, so do not grant access to workloads whose output should not be sent to the configured model.
-
-PowerShell and direct kubectl invocations remain available for deliberate manual use with the isolated
-tools profile:
-
-```bash
-docker compose --profile tools run --rm kdvops-tools kubectl get nodes
-docker compose --profile tools run --rm kdvops-tools pwsh -NoProfile
-```
-
-The `tools` service uses `sleep infinity` only when started through `docker compose up`, so enabling the
-profile does not inherit the image's `chat` command after removing its entrypoint. A command supplied with
-`docker compose run` replaces that idle command, as shown above.
-
-The tools profile deliberately does not load `.env` as its container environment, so manual commands cannot inherit the OpenClaw,
-Cloudflare Access, or Azure DevOps credentials used by the agent service.
 
 The image build disables pip certificate validation for the Python package hosts by default so it can run
 behind workplace TLS-inspection proxies:
