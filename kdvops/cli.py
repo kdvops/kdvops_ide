@@ -234,6 +234,18 @@ def broker() -> None:
 
 
 @app.command()
+def runtime() -> None:
+    """Run the persistent local session runtime for lightweight clients."""
+    try:
+        from .runtime import serve_runtime
+
+        serve_runtime(load_settings())
+    except (ValueError, OSError) as exc:
+        console.print(f"[red]Runtime configuration error:[/] {exc}")
+        raise typer.Exit(2)
+
+
+@app.command()
 def web() -> None:
     """Run the local browser chat interface with persistent conversations."""
     try:

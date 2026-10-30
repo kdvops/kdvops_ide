@@ -1,4 +1,4 @@
-# KDvops CLI · 0.5.0
+# KDvops CLI · 0.6.0-dev
 
 Containerized, human-supervised coding CLI written in Python. The agent runs remotely on OpenClaw (Raspberry Pi 5 behind Cloudflare Tunnel), while local tools operate only on a Docker-mounted `/workspace`.
 
@@ -18,8 +18,24 @@ cp .env.example .env
 # If Cloudflare Access protects the endpoint, also set its Service Token pair.
 # On Linux, set KDVOPS_UID to the result of: id -u
 docker compose build
-docker compose run --rm kdvops chat
+docker compose up -d kdvops-runtime
 ```
+
+The container now runs as a persistent local runtime. It stores sessions and event history in the
+`kdvops-runtime-data` volume and exposes its authenticated API only on `127.0.0.1:8765`. The upcoming
+lightweight terminal client will use this API; broker, Cloudflare, Git, kubectl, curl, and workspace
+credentials remain inside the container.
+
+Implemented runtime endpoints:
+
+- `POST /v1/sessions` and `GET /v1/sessions`
+- `POST /v1/sessions/{id}/messages` for queueing while work is active
+- `POST /v1/sessions/{id}/stop` for cooperative cancellation
+- `GET /v1/sessions/{id}` for persistent history and status
+- `GET /v1/sessions/{id}/events?after=<id>` for incremental operation events
+
+All endpoints require `Authorization: Bearer $KDVOPS_RUNTIME_TOKEN`. Mutation approval remains denied
+until the client-side approval channel is connected, so the runtime does not silently approve writes.
 
 The image includes `kubectl` and PowerShell 7 (`pwsh`). Set the host kubeconfig path in `.env`; Compose
 mounts it read-only and exports the in-container path through `KUBECONFIG`:
@@ -66,13 +82,13 @@ Windows PowerShell:
 Copy-Item .env.example .env
 notepad .env
 docker compose build
-docker compose run --rm kdvops chat
+docker compose run --rm --entrypoint kdvops kdvops-runtime chat
 ```
 
 Single request:
 
 ```bash
-docker compose run --rm kdvops run "Explain this project and suggest improvements"
+docker compose run --rm --entrypoint kdvops kdvops-runtime run "Explain this project and suggest improvements"
 ```
 
 Recursive file inspection and HTTPS APIs are available through constrained local actions. Network access is
@@ -92,13 +108,13 @@ responses are capped at 1 MB. Add webhook hosts explicitly to `KDVOPS_HTTP_ALLOW
 Status:
 
 ```bash
-docker compose run --rm kdvops status
+docker compose run --rm --entrypoint kdvops kdvops-runtime status
 ```
 
 Gateway compatibility check:
 
 ```bash
-docker compose run --rm kdvops doctor
+docker compose run --rm --entrypoint kdvops kdvops-runtime doctor
 ```
 
 The command verifies authentication, confirms that `/v1/models` returns the OpenClaw agent targets, and detects the common case where the Gateway serves dashboard HTML because Chat Completions is disabled.

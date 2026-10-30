@@ -1,5 +1,5 @@
 services:
-  kdvops:
+  kdvops-runtime:
     build:
       context: .
       args:
@@ -13,9 +13,17 @@ services:
     environment:
       KDVOPS_WORKSPACE: /workspace
       KUBECONFIG: /home/kdvops/.kube/config
+      KDVOPS_RUNTIME_HOST: 0.0.0.0
+      KDVOPS_RUNTIME_PORT: 8765
+      KDVOPS_RUNTIME_DB: /home/kdvops/.local/share/kdvops/runtime.db
+    command: ["runtime"]
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:${KDVOPS_RUNTIME_PORT:-8765}:8765"
     volumes:
       - ${HOST_WORKSPACE:?Set HOST_WORKSPACE in .env}:/workspace:rw
       - ${HOST_KUBECONFIG:?Set HOST_KUBECONFIG in .env}:/home/kdvops/.kube/config:ro
+      - kdvops-runtime-data:/home/kdvops/.local/share/kdvops:rw
     working_dir: /workspace
     read_only: true
     tmpfs:
@@ -26,3 +34,20 @@ services:
       - ALL
     pids_limit: 128
     mem_limit: 512m
+    healthcheck:
+      test:
+        - CMD
+        - python
+        - -c
+        - >-
+          import os,urllib.request;
+          r=urllib.request.Request('http://127.0.0.1:8765/health',
+          headers={'Authorization':'Bearer '+os.environ['KDVOPS_RUNTIME_TOKEN']});
+          urllib.request.urlopen(r,timeout=3)
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+
+volumes:
+  kdvops-runtime-data:
