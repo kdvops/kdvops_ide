@@ -15,6 +15,7 @@ Do not expose your token in tickets, logs, screenshots or git. Cloudflare Tunnel
 ```bash
 cp .env.example .env
 # Edit HOST_WORKSPACE, OPENCLAW_API_URL, OPENCLAW_TOKEN, OPENCLAW_MODEL
+# Generate KDVOPS_RUNTIME_TOKEN with: python -c "import secrets; print(secrets.token_urlsafe(32))"
 # If Cloudflare Access protects the endpoint, also set its Service Token pair.
 # On Linux, set KDVOPS_UID to the result of: id -u
 docker compose build
