@@ -266,7 +266,10 @@ def test_manager_fails_orphan_after_single_recovery_retry(tmp_path):
     assert reopened.recover_pending() == []
     assert reopened.queue_state(queue_id) == "failed"
     assert reopened.get_session(session_id)["status"] == "failed"
-    assert reopened.events(session_id)[-1]["payload"] == {"status": "failed"}
+    assert reopened.events(session_id)[-1]["payload"] == {
+        "status": "failed",
+        "queue_id": queue_id,
+    }
 
 
 def test_recovery_preserves_cancel_accepted_before_retry_crash(tmp_path):
@@ -295,6 +298,6 @@ def test_recovery_preserves_cancel_accepted_before_retry_crash(tmp_path):
     ],
 )
 def test_runtime_rejects_placeholder_or_low_entropy_tokens(tmp_path, token):
-    store, manager, _ = make_runtime(tmp_path)
+    _store, manager, _ = make_runtime(tmp_path)
     with pytest.raises(ValueError, match="random"):
         RuntimeApp(manager, token)

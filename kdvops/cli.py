@@ -246,6 +246,31 @@ def runtime() -> None:
 
 
 @app.command()
+def client(
+    session: str | None = typer.Option(None, "--session", "-s", help="Resume a session by ID"),
+    url: str | None = typer.Option(None, "--url", help="Runtime API URL (token stays in env)"),
+) -> None:
+    """Open the lightweight terminal for the persistent local runtime."""
+    from .runtime_client import RuntimeApiClient, RuntimeClientError, run_terminal
+
+    api = None
+    try:
+        api = RuntimeApiClient.from_env(base_url=url)
+        run_terminal(
+            api,
+            session_id=session,
+            input_fn=console.input,
+            output_fn=lambda text: console.print(text, markup=False),
+        )
+    except (ValueError, RuntimeClientError) as exc:
+        console.print(f"Runtime client error: {exc}", style="red", markup=False)
+        raise typer.Exit(2)
+    finally:
+        if api is not None:
+            api.close()
+
+
+@app.command()
 def web() -> None:
     """Run the local browser chat interface with persistent conversations."""
     try:

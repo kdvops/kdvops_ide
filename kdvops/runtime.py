@@ -202,7 +202,10 @@ class RuntimeStore:
                 payload = (
                     {"queue_id": queue_id}
                     if state == "cancelled"
-                    else {"error": "Run recovery retry limit exceeded"}
+                    else {
+                        "queue_id": queue_id,
+                        "error": "Run recovery retry limit exceeded",
+                    }
                 )
                 db.execute(
                     "UPDATE queued_messages SET state = ? WHERE id = ?", (state, queue_id)
@@ -213,7 +216,12 @@ class RuntimeStore:
                 )
                 db.execute(
                     "INSERT INTO events(session_id, kind, payload, created_at) VALUES (?, ?, ?, ?)",
-                    (session_id, "run.status", json.dumps({"status": state}), now),
+                    (
+                        session_id,
+                        "run.status",
+                        json.dumps({"status": state, "queue_id": queue_id}),
+                        now,
+                    ),
                 )
                 db.execute(
                     "UPDATE sessions SET status = ?, cancel_requested = 0, "
@@ -250,6 +258,8 @@ class RuntimeStore:
                 state = "cancelled"
                 event_kind = "message.cancelled"
                 event_payload = {"queue_id": queue_id}
+            else:
+                event_payload = {**event_payload, "queue_id": queue_id}
             if state == "cancelled" and messages:
                 # Never retain a final answer or an unmatched assistant tool call
                 # from a run whose cancellation was accepted.
@@ -266,7 +276,12 @@ class RuntimeStore:
             )
             db.execute(
                 "INSERT INTO events(session_id, kind, payload, created_at) VALUES (?, ?, ?, ?)",
-                (session_id, "run.status", json.dumps({"status": status}), now),
+                (
+                    session_id,
+                    "run.status",
+                    json.dumps({"status": status, "queue_id": queue_id}),
+                    now,
+                ),
             )
             db.execute("UPDATE queued_messages SET state = ? WHERE id = ?", (state, queue_id))
             db.execute(
@@ -438,7 +453,11 @@ class RuntimeManager:
                         break
                     name = call["function"]["name"]
                     arguments = json.loads(call["function"]["arguments"])
-                    self.store.add_event(session_id, "tool.started", {"name": name, "arguments": arguments})
+                    self.store.add_event(
+                        session_id,
+                        "tool.started",
+                        {"queue_id": queue_id, "name": name, "arguments": arguments},
+                    )
                     # Approval-required actions stay denied until the terminal client's approval
                     # channel is implemented; the runtime never silently approves mutations.
                     if name == "write_file" or (
@@ -456,7 +475,11 @@ class RuntimeManager:
                     tool_message = {"role": "tool", "tool_call_id": call["id"], "content": result}
                     messages.append(tool_message)
                     added.append(tool_message)
-                    self.store.add_event(session_id, "tool.completed", {"name": name, "result": result})
+                    self.store.add_event(
+                        session_id,
+                        "tool.completed",
+                        {"queue_id": queue_id, "name": name, "result": result},
+                    )
         except (httpx.HTTPError, KeyError, ValueError, TypeError, RuntimeError, TimeoutError) as exc:
             self.store.finish_run(
                 session_id, queue_id, "failed", messages=added,

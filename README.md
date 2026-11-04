@@ -23,9 +23,34 @@ docker compose up -d kdvops-runtime
 ```
 
 The container now runs as a persistent local runtime. It stores sessions and event history in the
-`kdvops-runtime-data` volume and exposes its authenticated API only on `127.0.0.1:8765`. The upcoming
-lightweight terminal client will use this API; broker, Cloudflare, Git, kubectl, curl, and workspace
-credentials remain inside the container.
+`kdvops-runtime-data` volume and exposes its authenticated API only on `127.0.0.1:8765`. The lightweight
+terminal client uses this API; broker, Cloudflare, Git, kubectl, curl, and workspace credentials remain
+inside the container.
+
+Open the terminal client in the running container:
+
+```bash
+docker compose exec kdvops-runtime kdvops client
+```
+
+The client creates a conversation automatically when the first prompt is sent. Its interactive commands
+are `/new [title]`, `/sessions`, `/use <id>`, `/status`, `/events`, `/stop`, `/help`, and `/exit`. Resume a
+known conversation directly with:
+
+```bash
+docker compose exec kdvops-runtime kdvops client --session <session-id>
+```
+
+When the Python package is installed on the host, the same client can connect through the loopback port:
+
+```bash
+export KDVOPS_RUNTIME_TOKEN='<same random token configured in .env>'
+export KDVOPS_RUNTIME_URL=http://127.0.0.1:8765
+kdvops client
+```
+
+The token is read only from the environment, never from a command-line option. Cleartext HTTP runtime URLs
+are accepted only for `127.0.0.1`, `localhost`, and `::1`; remote runtime endpoints must use HTTPS.
 
 Implemented runtime endpoints:
 
