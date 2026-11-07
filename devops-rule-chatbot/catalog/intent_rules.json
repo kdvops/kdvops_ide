@@ -1,0 +1,19 @@
+{
+  "help": {"subjects": [], "triggers": ["ayuda", "help", "que puedes hacer", "comandos disponibles"]},
+  "list_pods": {"subjects": ["pod", "pods", "contenedores"], "triggers": ["mostrar", "listar", "consulta", "consultar", "cuales", "cuantos", "ver", "enseña", "muestra", "dame"], "negative": ["fallando", "fallan", "fallos", "problemas", "error", "errores", "crashloopbackoff", "pending", "logs", "reinicia"]},
+  "failing_pods": {"subjects": ["pod", "pods", "contenedores"], "triggers": ["fallando", "fallan", "fallos", "problemas", "error", "errores", "crashloopbackoff", "pending", "no estan ready", "no estan saludables", "caidos", "falla"]},
+  "list_deployments": {"subjects": ["deployment", "deployments", "despliegues"], "triggers": ["mostrar", "listar", "consulta", "consultar", "ver", "muestra", "dame", "cuantos"], "negative": ["estado", "replicas", "ready", "reinicia"]},
+  "list_namespaces": {"subjects": ["namespace", "namespaces", "ns"], "triggers": ["listar", "mostrar", "ver", "muestra", "dame", "cuales", "cuantos"]},
+  "list_events": {"subjects": ["eventos", "events", "evento"], "triggers": ["listar", "mostrar", "ver", "consulta", "muestra", "dame", "ultimos"]},
+  "get_pod_logs": {"subjects": ["logs", "log", "registros"], "triggers": ["logs", "log", "registros", "trazas", "ultimos"]},
+  "describe_pod": {"subjects": ["pod", "pods"], "triggers": ["describe", "descripcion", "diagnostica", "diagnostico", "por que falla", "que le pasa"]},
+  "get_nodes": {"subjects": ["nodos", "nodo", "nodes", "node"], "triggers": ["listar", "mostrar", "ver", "estado", "ready", "consulta"]},
+  "get_services": {"subjects": ["servicios", "servicio", "services", "service", "svc"], "triggers": ["listar", "mostrar", "ver", "consulta", "estado"]},
+  "get_pvc": {"subjects": ["pvc", "volumen", "volumenes", "persistentvolumeclaim"], "triggers": ["listar", "mostrar", "ver", "estado", "consulta", "pending"]},
+  "get_deployment_status": {"subjects": ["deployment", "deployments", "despliegues"], "triggers": ["estado", "replicas", "ready", "disponible", "salud"]},
+  "get_argocd_apps": {"subjects": ["argocd", "argo", "gitops", "aplicaciones"], "triggers": ["sync", "sincronizado", "sincronizacion", "outofsync", "aplicaciones", "health", "estado"]},
+  "get_pipeline_status": {"subjects": ["pipeline", "pipelines", "build", "release", "azure devops"], "triggers": ["estado", "fallido", "fallando", "ultimo", "ejecuciones", "resultado"]},
+  "get_alerts": {"subjects": ["alertas", "alerta", "alertmanager"], "triggers": ["alertas", "alerta", "activas", "disparadas"]},
+  "get_metrics": {"subjects": ["metricas", "metrica", "cpu", "memoria", "prometheus", "grafana"], "triggers": ["metricas", "metrica", "consumo", "uso", "cpu", "memoria"]},
+  "get_security_findings": {"subjects": ["cve", "vulnerabilidades", "trivy", "sbom", "seguridad"], "triggers": ["cve", "vulnerabilidades", "vulnerabilidad", "hallazgos", "riesgos"]}
+}
