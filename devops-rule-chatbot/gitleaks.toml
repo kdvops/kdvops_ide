@@ -1,0 +1,16 @@
+title = "KDvops secret detection rules"
+
+[extend]
+useDefault = true
+
+[[rules]]
+id = "kdvops-private-key"
+description = "Private key material"
+regex = '''(?i)-----BEGIN [A-Z0-9 ]*PRIVATE KEY-----'''
+keywords = ["PRIVATE KEY"]
+
+[[rules]]
+id = "kdvops-assigned-secret"
+description = "Secret assigned to a configuration variable"
+regex = '''(?i)(password|passwd|secret|token|api[_-]?key)\s*[:=]\s*["']?[A-Za-z0-9_+/=-]{16,}["']?'''
+keywords = ["password", "passwd", "secret", "token", "api_key", "api-key"]

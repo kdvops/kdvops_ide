@@ -3,15 +3,20 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-    image: devops-rule-chatbot:0.4.0
+    image: devops-rule-chatbot:0.5.0
     container_name: devops-rule-chatbot
     restart: unless-stopped
     ports:
       - "127.0.0.1:8000:8000"
     environment:
-      DEMO_MODE: "true"
+      DEMO_MODE: "false"
       PYTHONUNBUFFERED: "1"
+      KUBECONFIG: /home/chatbot/.kube/config
+    volumes:
+      - ${USERPROFILE}/.kube:/home/chatbot/.kube:ro
     read_only: true
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,size=32m
     security_opt:
       - no-new-privileges:true
     cap_drop:

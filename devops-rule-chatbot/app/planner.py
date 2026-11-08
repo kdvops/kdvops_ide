@@ -3,6 +3,7 @@ import re
 from .nlu import parse, normalize
 
 READ_INTENTS = {'list_pods','failing_pods','list_deployments','list_namespaces','list_events'}
+PLAN_INTENTS = READ_INTENTS | {'help'}
 FOLLOWUP = re.compile(r"\b(?:y|tambien|ademas)\s+(?:los|las|el|la)?\s*(?:que\s+)?(?:fallan|fallando|tienen errores|estan mal)\b")
 
 
@@ -22,7 +23,7 @@ def plan(message, context=None):
         result=parse(part,context)
         if result['status'] == 'unknown' and FOLLOWUP.search(normalize(part)) and context.get('last_intent') in ('list_pods','failing_pods'):
             result=parse('pods que fallan',context)
-        if result['status'] != 'matched' or result['intent'] not in READ_INTENTS:
+        if result['status'] != 'matched' or result['intent'] not in PLAN_INTENTS:
             return {'status':'unsupported' if result['status']=='unsupported' else result['status'], 'steps':[], 'nlu':result,'reason':'step_not_executable', 'kind':'compound' if len(parts) > 1 else 'single'}
         explicit_namespace = result.get('namespace')
         namespace = explicit_namespace or propagated_namespace

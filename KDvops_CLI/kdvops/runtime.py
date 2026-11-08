@@ -22,9 +22,10 @@ from uuid import UUID, uuid4
 import httpx
 import uvicorn
 
-from .agent import AgentClient
+from .rule_client import agent_for_settings
 from .cli import SYSTEM, check_repeated_tool_round, execute_tool
 from .workspace import Workspace
+from .privacy import PrivacyFilter
 
 MAX_REQUEST_BYTES = 32_768
 MAX_PROMPT_CHARS = 16_000
@@ -353,7 +354,7 @@ class RuntimeStore:
 
 
 class RuntimeManager:
-    def __init__(self, settings, store: RuntimeStore, agent_factory=AgentClient):
+    def __init__(self, settings, store: RuntimeStore, agent_factory=agent_for_settings):
         self.settings, self.store, self.agent_factory = settings, store, agent_factory
         self.workspace = Workspace(
             settings.workspace,
@@ -407,7 +408,18 @@ class RuntimeManager:
                 event_kind="message.cancelled", event_payload={"queue_id": queue_id},
             )
             return
-        user_message = {"role": "user", "content": prompt}
+        privacy = PrivacyFilter(
+            (
+                getattr(self.settings, "token", ""),
+                getattr(self.settings, "cf_access_client_id", ""),
+                getattr(self.settings, "cf_access_client_secret", ""),
+                getattr(self.settings, "azure_devops_pat", ""),
+                *getattr(self.settings, "privacy_sensitive_values", ()),
+            ),
+            enabled=getattr(self.settings, "privacy_masking", True),
+            require_scanner=True,
+        )
+        user_message = {"role": "user", "content": privacy.mask_text(prompt)}
         self.store.add_event(session_id, "message.accepted", {"queue_id": queue_id})
         messages = self.store.messages(session_id)
         messages.append(user_message)

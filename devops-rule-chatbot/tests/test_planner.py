@@ -24,6 +24,12 @@ def test_single_read():
     assert result['status'] == 'ready'
     assert result['kind'] == 'single'
 
+def test_help_has_executable_plan_shape():
+    result = plan('ayuda')
+    assert result['status'] == 'ready'
+    assert result['kind'] == 'single'
+    assert result['steps'][0]['intent'] == 'help'
+
 def test_context_namespace_is_reused():
     result = plan('dame los eventos', {'namespace':'demo'})
     assert result['steps'][0]['namespace'] == 'demo'

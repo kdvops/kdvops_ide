@@ -178,6 +178,7 @@ def run_terminal(
     output_fn: Callable[[str], None] = print,
     sleep_fn: Callable[[float], None] = time.sleep,
     poll_interval: float = 0.5,
+    local_context=None,
 ) -> None:
     """Run the interactive terminal protocol using an injected API client."""
     emit = lambda value: output_fn(sanitize_terminal(value))
@@ -241,6 +242,13 @@ def run_terminal(
         if command.startswith("/"):
             emit(f"Unknown command: {command}. Type /help.")
             continue
+        if local_context is not None:
+            from .local_rules import handle_local_request
+
+            local_result = handle_local_request(line, *local_context)
+            if local_result.handled:
+                emit(local_result.message)
+                continue
         if selected is None:
             created = api.create_session("Terminal")
             selected = created["id"]

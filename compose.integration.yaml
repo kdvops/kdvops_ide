@@ -1,0 +1,62 @@
+services:
+  devops-rule-chatbot:
+    build:
+      context: ./devops-rule-chatbot
+      dockerfile: Dockerfile
+    image: devops-rule-chatbot:integration
+    environment:
+      DEMO_MODE: "false"
+      PYTHONUNBUFFERED: "1"
+      KUBECONFIG: /home/chatbot/.kube/config
+    volumes:
+      - ${USERPROFILE}/.kube:/home/chatbot/.kube:ro
+    read_only: true
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,size=64m
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/healthz', timeout=3)"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+      start_period: 5s
+
+  kdvops-cli:
+    build:
+      context: ./KDvops_CLI
+      dockerfile: Dockerfile
+      args:
+        KDVOPS_UID: 10001
+    image: kdvops-cli:rules-integration
+    environment:
+      KDVOPS_MODE: rules
+      DEVOPS_RULE_URL: http://devops-rule-chatbot:8000
+      KDVOPS_WORKSPACE: /workspace
+      KDVOPS_TIMEOUT: "10"
+      KDVOPS_RUN_TIMEOUT: "60"
+      KDVOPS_RUNTIME_HOST: 0.0.0.0
+      KDVOPS_RUNTIME_PORT: "8765"
+      KDVOPS_RUNTIME_TOKEN: "integration-runtime-token-7f3a9c2e1b8d4f6a0c5e9a2b7d1f8c3e"
+      KDVOPS_RUNTIME_DB: /home/kdvops/.local/share/kdvops/runtime.db
+    depends_on:
+      devops-rule-chatbot:
+        condition: service_healthy
+    read_only: true
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,size=32m
+      - /home/kdvops/.local/share/kdvops:rw,noexec,nosuid,size=16m,uid=10001,gid=10001,mode=700
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    working_dir: /workspace
+    command: ["runtime"]
+    volumes:
+      - .:/workspace:rw
+
+networks:
+  default:
+    name: kdvops-rules-integration

@@ -14,6 +14,8 @@ from .config import Settings
 from .http_tool import request_https
 from .kubectl_tool import kubectl_read
 from .workspace import Workspace
+from .rule_client import agent_for_settings
+from .local_rules import handle_local_request
 
 app = typer.Typer(help="KDvops CLI: supervised local coding with a remote OpenClaw agent")
 console = Console()
@@ -117,9 +119,10 @@ def chat_loop(settings: Settings, once: str | None = None) -> None:
         allow_sensitive_reads=settings.allow_sensitive_reads,
         allow_sensitive_writes=settings.allow_sensitive_writes,
     )
-    agent = AgentClient(settings)
+    agent = agent_for_settings(settings)
     messages = [{"role": "system", "content": SYSTEM}]
-    console.print(f"[bold cyan]KDvops CLI[/] | Workspace: {ws.root} | Endpoint: {settings.endpoint}")
+    target = settings.rule_endpoint if settings.mode == "rules" else settings.endpoint
+    console.print(f"[bold cyan]KDvops CLI[/] | Mode: {settings.mode} | Workspace: {ws.root} | Service: {target}")
     while True:
         if once is not None:
             prompt = once
@@ -135,11 +138,18 @@ def chat_loop(settings: Settings, once: str | None = None) -> None:
         if prompt in ("/exit", "/quit"):
             break
         if prompt == "/help":
-            console.print("/help /files /exit — All other input is sent to OpenClaw")
+            console.print("/help /files /exit — En modo rules también puedes analizar, leer, crear y modificar archivos con confirmación")
             continue
         if prompt == "/files":
             console.print("\n".join(ws.list_files()))
             continue
+        if settings.mode == "rules":
+            local_result = handle_local_request(prompt, ws, settings, console)
+            if local_result.handled:
+                console.print(Panel(local_result.message, title="Acción local determinista"))
+                if once is not None:
+                    break
+                continue
         messages.append({"role": "user", "content": prompt})
         try:
             deadline = time.monotonic() + settings.run_timeout
@@ -154,7 +164,8 @@ def chat_loop(settings: Settings, once: str | None = None) -> None:
                 messages.append(reply)
                 calls = reply.get("tool_calls") or []
                 if not calls:
-                    console.print(Panel(reply.get("content") or "(empty response)", title="OpenClaw"))
+                    title = "DevOps rules" if settings.mode == "rules" else "OpenClaw"
+                    console.print(Panel(reply.get("content") or "(empty response)", title=title))
                     break
                 previous_round, repeated_rounds = check_repeated_tool_round(
                     calls, previous_round, repeated_rounds
@@ -200,7 +211,7 @@ def status() -> None:
     try:
         cfg = load_settings()
         console.print(
-            f"Endpoint: {cfg.endpoint}\nModel: {cfg.model}\nWorkspace: {cfg.workspace}\n"
+            f"Mode: {cfg.mode}\nService: {cfg.rule_endpoint if cfg.mode == 'rules' else cfg.endpoint}\nModel: {cfg.model}\nWorkspace: {cfg.workspace}\n"
             f"Tool iterations: unlimited\nRun deadline: {cfg.run_timeout:g}s\nToken: configured"
         )
     except (ValueError, OSError) as exc:
@@ -213,6 +224,9 @@ def doctor() -> None:
     """Verify Gateway connectivity and OpenAI-compatible API support."""
     try:
         cfg = load_settings()
+        if cfg.mode == "rules":
+            console.print(f"[bold green]Rules service mode[/] | {cfg.rule_endpoint}")
+            return
         models = AgentClient(cfg).probe()
         console.print("[bold green]Gateway compatible[/]")
         console.print("Available agent targets: " + ", ".join(models), markup=False)
@@ -255,12 +269,19 @@ def client(
 
     api = None
     try:
+        settings = load_settings()
+        ws = Workspace(
+            settings.workspace,
+            allow_sensitive_reads=settings.allow_sensitive_reads,
+            allow_sensitive_writes=settings.allow_sensitive_writes,
+        )
         api = RuntimeApiClient.from_env(base_url=url)
         run_terminal(
             api,
             session_id=session,
             input_fn=console.input,
             output_fn=lambda text: console.print(text, markup=False),
+            local_context=(ws, settings, console) if settings.mode == "rules" else None,
         )
     except (ValueError, RuntimeClientError) as exc:
         console.print(f"Runtime client error: {exc}", style="red", markup=False)

@@ -93,6 +93,7 @@ class AgentClient:
                 *getattr(settings, "privacy_sensitive_values", ()),
             ),
             enabled=getattr(settings, "privacy_masking", True),
+            require_scanner=True,
         )
 
     def _client(self) -> httpx.Client:
@@ -160,4 +161,4 @@ class AgentClient:
         # Model output is untrusted. In particular, never restore privacy
         # markers returned by the model: it saw those markers in the prompt and
         # could replay one into a final response or a local/HTTP tool call.
-        return decode_protocol_message(message)
+        return self.privacy.mask(decode_protocol_message(message))

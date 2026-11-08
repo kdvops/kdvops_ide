@@ -33,6 +33,30 @@ def test_settings_from_env(tmp_path, monkeypatch):
     assert settings.azure_devops_pat == "test-pat"
 
 
+def test_rules_mode_does_not_require_openclaw(tmp_path, monkeypatch):
+    monkeypatch.setenv("KDVOPS_MODE", "rules")
+    monkeypatch.delenv("OPENCLAW_API_URL", raising=False)
+    monkeypatch.delenv("OPENCLAW_TOKEN", raising=False)
+    monkeypatch.setenv("KDVOPS_WORKSPACE", str(tmp_path))
+
+    settings = Settings.from_env()
+
+    assert settings.mode == "rules"
+    assert settings.rule_endpoint == "http://127.0.0.1:8000"
+
+
+def test_auto_mode_falls_back_to_rules_without_openclaw(tmp_path, monkeypatch):
+    monkeypatch.setenv("KDVOPS_MODE", "auto")
+    monkeypatch.delenv("OPENCLAW_API_URL", raising=False)
+    monkeypatch.delenv("OPENCLAW_TOKEN", raising=False)
+    monkeypatch.setenv("KDVOPS_WORKSPACE", str(tmp_path))
+
+    settings = Settings.from_env()
+
+    assert settings.mode == "auto"
+    assert settings.endpoint == ""
+
+
 def test_settings_verifies_tls_by_default(tmp_path, monkeypatch):
     monkeypatch.setenv("OPENCLAW_API_URL", "https://example.test/v1")
     monkeypatch.setenv("OPENCLAW_TOKEN", "token")

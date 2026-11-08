@@ -1,3 +1,5 @@
+FROM zricethezav/gitleaks:v8.30.1 AS gitleaks
+
 FROM python:3.12-slim-bookworm@sha256:62ed8e07e544e8555c5d93748d5275015136b7f5c52b5e8679b4de339c3779d3
 ARG KDVOPS_UID=10001
 ARG KDVOPS_PIP_TRUSTED_HOST="pypi.org files.pythonhosted.org"
@@ -6,6 +8,8 @@ ARG POWERSHELL_VERSION=7.5.4
 ARG TARGETARCH
 ENV PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1
 WORKDIR /app
+COPY --from=gitleaks /usr/bin/gitleaks /usr/local/bin/gitleaks
+COPY gitleaks.toml /app/gitleaks.toml
 COPY pyproject.toml constraints-dev.txt /app/
 COPY kdvops /app/kdvops
 RUN apt-get update \

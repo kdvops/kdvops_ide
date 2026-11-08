@@ -12,6 +12,46 @@ Do not expose your token in tickets, logs, screenshots or git. Cloudflare Tunnel
 
 ## Quick start
 
+### Modo local sin IA
+
+KDvops puede trabajar sin OpenClaw usando el servicio determinista
+`devops-rule-chatbot`. Configure estas variables:
+
+```env
+KDVOPS_MODE=rules
+DEVOPS_RULE_URL=http://127.0.0.1:8000
+```
+
+En modo `rules`, el CLI también dispone de acciones locales deterministas sin
+OpenClaw ni LLM. Reconoce solicitudes para analizar directorios, leer YAML,
+crear manifiestos/pipelines y modificar `replicas` o `imagen` en YAML. Las
+creaciones y modificaciones muestran un diff, solicitan confirmación, pasan
+por `/api/security/scan` y solo entonces escriben dentro del workspace.
+
+Todo contenido que sale del CLI hacia un chatbot pasa primero por un filtro
+local de privacidad y por Gitleaks 8.30.1. Los secretos se reemplazan por
+marcadores irreversibles antes de enviarse; el CLI nunca envía el valor
+original. Esto aplica tanto al modo `rules` como al modo OpenClaw/IA.
+
+Para evaluar un pipeline local desde el CLI:
+
+```text
+evalúa el flujo DevSecOps de devops-rule-chatbot/azure-pipelines.yml
+```
+
+La evaluación devuelve puntuación, nivel, controles detectados, evidencia y brechas.
+
+Con el servicio de reglas levantado en localhost, ejecute:
+
+```bash
+kdvops run "muestra los pods en ns demo"
+kdvops chat
+```
+
+En este modo no se necesita `OPENCLAW_API_URL`, `OPENCLAW_TOKEN` ni un modelo LLM.
+El motor local solo ejecuta intenciones incluidas en su catálogo y bloquea operaciones
+no soportadas o potencialmente destructivas.
+
 ```bash
 cp .env.example .env
 # Edit HOST_WORKSPACE, OPENCLAW_API_URL, OPENCLAW_TOKEN, OPENCLAW_MODEL

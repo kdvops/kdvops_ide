@@ -16,7 +16,7 @@ from uuid import UUID, uuid4
 import httpx
 import uvicorn
 
-from .agent import AgentClient
+from .rule_client import agent_for_settings
 from .cli import SYSTEM, check_repeated_tool_round, execute_tool
 from .workspace import Workspace
 
@@ -116,7 +116,7 @@ class ConversationStore:
 
 
 class WebApp:
-    def __init__(self, settings, store: ConversationStore, web_token: str, agent_factory=AgentClient):
+    def __init__(self, settings, store: ConversationStore, web_token: str, agent_factory=agent_for_settings):
         if len(web_token) < 32:
             raise ValueError("KDVOPS_WEB_TOKEN must contain at least 32 characters")
         self.settings, self.store, self.agent_factory = settings, store, agent_factory

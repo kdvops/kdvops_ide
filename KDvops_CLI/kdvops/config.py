@@ -22,9 +22,14 @@ class Settings:
     azure_devops_pat: str = ""
     privacy_masking: bool = True
     privacy_sensitive_values: tuple[str, ...] = ()
+    mode: str = "ai"
+    rule_endpoint: str = "http://127.0.0.1:8000"
 
     @classmethod
     def from_env(cls) -> "Settings":
+        mode = os.getenv("KDVOPS_MODE", "ai").strip().lower()
+        if mode not in {"ai", "rules", "auto"}:
+            raise ValueError("KDVOPS_MODE must be ai, rules, or auto")
         endpoint = os.getenv("OPENCLAW_API_URL", "").strip().rstrip("/")
         token = os.getenv("OPENCLAW_TOKEN", "").strip()
         model = os.getenv("OPENCLAW_MODEL", "openclaw").strip()
@@ -33,7 +38,8 @@ class Settings:
         tls_verify = os.getenv("KDVOPS_TLS_VERIFY", "true").strip().lower() not in {
             "0", "false", "no",
         }
-        workspace = Path(os.getenv("KDVOPS_WORKSPACE", "/workspace")).resolve(strict=True)
+        workspace_default = "." if mode == "rules" else "/workspace"
+        workspace = Path(os.getenv("KDVOPS_WORKSPACE", workspace_default)).resolve(strict=True)
         cf_access_client_id = os.getenv("CF_ACCESS_CLIENT_ID", "").strip()
         cf_access_client_secret = os.getenv("CF_ACCESS_CLIENT_SECRET", "").strip()
         allow_sensitive_reads = os.getenv("KDVOPS_ALLOW_SENSITIVE_READS", "").strip().lower() in {
@@ -57,10 +63,17 @@ class Settings:
         )
         if not workspace.is_dir():
             raise ValueError("Workspace must be a directory")
-        if not endpoint.startswith("https://") and not endpoint.startswith("http://127.0.0.1:"):
-            raise ValueError("OPENCLAW_API_URL must be HTTPS (or localhost for development)")
-        if not token:
-            raise ValueError("OPENCLAW_TOKEN is required")
+        rule_endpoint = os.getenv("DEVOPS_RULE_URL", "http://127.0.0.1:8000").strip().rstrip("/")
+        if not rule_endpoint.startswith(("http://", "https://")):
+            raise ValueError("DEVOPS_RULE_URL must be HTTP or HTTPS")
+        ai_configured = bool(endpoint or token)
+        if mode == "ai" or (mode == "auto" and ai_configured):
+            if not endpoint.startswith("https://") and not endpoint.startswith("http://127.0.0.1:"):
+                raise ValueError("OPENCLAW_API_URL must be HTTPS (or localhost for development)")
+            if not token:
+                raise ValueError("OPENCLAW_TOKEN is required")
+        elif mode == "auto" and ai_configured:
+            raise ValueError("OPENCLAW_API_URL and OPENCLAW_TOKEN must be configured together")
         if timeout <= 0:
             raise ValueError("KDVOPS_TIMEOUT must be greater than zero")
         if not math.isfinite(run_timeout) or not 0 < run_timeout <= 86_400:
@@ -86,4 +99,6 @@ class Settings:
             azure_devops_pat=azure_devops_pat,
             privacy_masking=privacy_masking,
             privacy_sensitive_values=privacy_sensitive_values,
+            mode=mode,
+            rule_endpoint=rule_endpoint,
         )

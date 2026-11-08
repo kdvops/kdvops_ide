@@ -9,9 +9,14 @@ tool call or response.
 from __future__ import annotations
 
 import ipaddress
+import json
+import os
 import re
 import secrets
+import subprocess
+import tempfile
 from collections.abc import Iterable
+from pathlib import Path
 
 TOKEN_PREFIX = "__KDVOPS_MASK_"
 TOKEN_PATTERN = re.compile(r"__KDVOPS_MASK_[A-F0-9]{24}__")
@@ -31,11 +36,22 @@ PATTERNS: tuple[tuple[re.Pattern[str], int], ...] = (
 IPV4_PATTERN = re.compile(r"(?<![\d.])(?:\d{1,3}\.){3}\d{1,3}(?![\d.])")
 
 
+class PrivacyScanError(RuntimeError):
+    """Outbound content cannot be released because the scanner is unavailable."""
+
+
 class PrivacyFilter:
     """Mask sensitive values with opaque, session-scoped reversible tokens."""
 
-    def __init__(self, sensitive_values: Iterable[str] = (), *, enabled: bool = True):
+    def __init__(
+        self,
+        sensitive_values: Iterable[str] = (),
+        *,
+        enabled: bool = True,
+        require_scanner: bool = False,
+    ):
         self.enabled = enabled
+        self.require_scanner = require_scanner
         self._value_to_token: dict[str, str] = {}
         self._known_values = tuple(
             sorted({value for value in sensitive_values if len(value) >= 4}, key=len, reverse=True)
@@ -63,6 +79,8 @@ class PrivacyFilter:
     def mask_text(self, text: str) -> str:
         if not self.enabled or not text:
             return text
+        if self.require_scanner:
+            text = self._mask_with_gitleaks(text)
         # Never interpret user-supplied marker-shaped text as one of our tokens.
         text = TOKEN_PATTERN.sub(lambda match: self._token_for(match.group(0)), text)
         for value in self._known_values:
@@ -82,6 +100,50 @@ class PrivacyFilter:
             text,
         )
         return text
+
+    def _mask_with_gitleaks(self, text: str) -> str:
+        """Redact findings locally before any remote request is made."""
+        with tempfile.TemporaryDirectory(prefix="kdvops-outbound-scan-") as directory:
+            source = Path(directory) / "payload.txt"
+            report = Path(directory) / "report.json"
+            source.write_text(text, encoding="utf-8")
+            try:
+                result = subprocess.run(
+                    [
+                        "gitleaks", "dir", str(source), "--no-banner", "--config", "/app/gitleaks.toml",
+                        "--report-format", "json", "--report-path", str(report), "--exit-code", "1",
+                    ],
+                    capture_output=True,
+                    text=True,
+                    timeout=3,
+                    check=False,
+                    env={"PATH": os.getenv("PATH", "")},
+                )
+            except (FileNotFoundError, subprocess.TimeoutExpired, OSError) as exc:
+                raise PrivacyScanError("Gitleaks no está disponible para filtrar la salida") from exc
+            if result.returncode not in {0, 1} or not report.exists():
+                raise PrivacyScanError("Gitleaks no pudo completar el filtro de salida")
+            try:
+                findings = json.loads(report.read_text(encoding="utf-8"))
+            except (OSError, UnicodeError, json.JSONDecodeError):
+                raise PrivacyScanError("Gitleaks devolvió un reporte inválido")
+            lines = text.splitlines(keepends=True)
+            for finding in sorted(
+                (item for item in findings if isinstance(item, dict)),
+                key=lambda item: (item.get("StartLine", 0), item.get("StartColumn", 0)),
+                reverse=True,
+            ):
+                line_number = int(finding.get("StartLine") or 0)
+                end_line = int(finding.get("EndLine") or line_number)
+                if not 1 <= line_number <= len(lines):
+                    continue
+                marker = self._token_for(f"gitleaks:{finding.get('RuleID', 'secret')}:{line_number}")
+                # Redact the complete affected line(s). This is intentionally
+                # conservative: column metadata differs between scanner rules,
+                # and retaining one trailing character could leak a secret.
+                for index in range(max(0, line_number - 1), min(len(lines), end_line)):
+                    lines[index] = marker + ("\n" if lines[index].endswith("\n") else "")
+            return "".join(lines)
 
     def mask(self, value):
         """Return a recursively masked copy of JSON-compatible data."""
