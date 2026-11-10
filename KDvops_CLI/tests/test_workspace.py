@@ -15,6 +15,20 @@ def test_recursive_listing_includes_nested_files(tmp_path):
     assert "src/app.py" in Workspace(tmp_path).list_files(recursive=True)
 
 
+def test_recursive_listing_skips_generated_and_dependency_directories(tmp_path):
+    (tmp_path / "src").mkdir()
+    (tmp_path / "src" / "app.py").write_text("ok")
+    for name in (".git", "node_modules", "__pycache__", "dist"):
+        folder = tmp_path / name
+        folder.mkdir()
+        (folder / "large.txt").write_text("generated")
+
+    result = Workspace(tmp_path).list_files(recursive=True)
+
+    assert "src/app.py" in result
+    assert all(not item.startswith((".git", "node_modules", "__pycache__", "dist")) for item in result)
+
+
 def test_listing_hides_sensitive_names_by_default(tmp_path):
     (tmp_path / ".env").write_text("SECRET=value")
     (tmp_path / "deploy.key").write_text("key")

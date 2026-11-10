@@ -228,6 +228,7 @@ def test_http_chat_forwards_sanitized_request(config):
         json=valid_payload(),
     )
     assert response.status_code == 200
+    assert response.headers["x-request-id"].startswith("req-")
     assert captured["request"]["model"] == "openclaw/kdvops"
     assert captured["request"]["tools"][0]["function"]["description"] != "malicious replacement"
 

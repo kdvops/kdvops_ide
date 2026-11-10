@@ -3,7 +3,7 @@ import json
 import httpx
 import pytest
 
-from kdvops.agent import AgentClient, decode_protocol_message
+from kdvops.agent import MAX_UPSTREAM_TURNS, AgentClient, decode_protocol_message
 
 
 class Settings:
@@ -93,6 +93,53 @@ def test_complete_reuses_stable_conversation_id():
     bodies = [request.read().decode() for request in requests]
     assert client.conversation_id in bodies[0]
     assert client.conversation_id in bodies[1]
+
+
+def test_complete_rotates_upstream_conversation_before_hidden_context_grows():
+    users = []
+
+    def handler(request):
+        users.append(json.loads(request.content)["user"])
+        return httpx.Response(
+            200,
+            json={"choices": [{"message": {"content": '{"action":"final","content":"ok"}'}}]},
+        )
+
+    client = AgentClient(Settings(), transport=httpx.MockTransport(handler), conversation_id="kdvops:initial")
+    for _ in range(MAX_UPSTREAM_TURNS + 1):
+        client.complete([])
+
+    assert users[:MAX_UPSTREAM_TURNS] == ["kdvops:initial"] * MAX_UPSTREAM_TURNS
+    assert users[-1] != "kdvops:initial"
+
+
+def test_complete_uses_configured_upstream_turn_limit():
+    users = []
+
+    def handler(request):
+        users.append(json.loads(request.content)["user"])
+        return httpx.Response(
+            200,
+            json={"choices": [{"message": {"content": '{"action":"final","content":"ok"}'}}]},
+        )
+
+    settings = Settings()
+    settings.max_upstream_turns = 2
+    client = AgentClient(settings, transport=httpx.MockTransport(handler), conversation_id="kdvops:initial")
+    for _ in range(3):
+        client.complete([])
+
+    assert users[:2] == ["kdvops:initial"] * 2
+    assert users[-1] != "kdvops:initial"
+
+
+def test_complete_http_error_includes_safe_correlation_details():
+    def handler(request):
+        return httpx.Response(524, headers={"cf-ray": "abc123"}, request=request)
+
+    client = AgentClient(Settings(), transport=httpx.MockTransport(handler))
+    with pytest.raises(httpx.HTTPStatusError, match=r"HTTP 524.*cf-ray=abc123"):
+        client.complete([])
 
 
 def test_complete_masks_outbound_data_without_restoring_replayed_marker():

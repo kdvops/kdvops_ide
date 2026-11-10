@@ -41,6 +41,19 @@ non-GET requests and file writes require local human approval. Never claim an op
 the corresponding tool result confirms it. Keep edits small and reviewable."""
 
 
+def explain_connection_error(exc: Exception) -> str:
+    """Return a safe actionable diagnosis for known transport failures."""
+    if isinstance(exc, httpx.HTTPStatusError) and exc.response.status_code == 524:
+        return (
+            "Cloudflare reached the broker but the upstream agent did not answer before the proxy "
+            "deadline. Start a new CLI session if this run has a long history, retry with a smaller "
+            "scope, and correlate the cf-ray shown above with broker/Gateway logs."
+        )
+    if isinstance(exc, httpx.TimeoutException):
+        return "The endpoint did not answer before KDVOPS_TIMEOUT. Check broker and Gateway health."
+    return "Run `kdvops doctor` and inspect broker/Gateway logs for the same timestamp."
+
+
 def load_settings() -> Settings:
     settings = Settings.from_env()
     if not settings.tls_verify:
@@ -179,6 +192,7 @@ def chat_loop(settings: Settings, once: str | None = None) -> None:
                     messages.append({"role": "tool", "tool_call_id": call["id"], "content": result})
         except (httpx.HTTPError, ValueError, KeyError, TypeError, RuntimeError, TimeoutError) as exc:
             console.print(f"[red]Connection or protocol error:[/] {type(exc).__name__}: {exc}")
+            console.print(f"[yellow]Diagnosis:[/] {explain_connection_error(exc)}")
             if once is not None:
                 raise typer.Exit(1)
         if once is not None:

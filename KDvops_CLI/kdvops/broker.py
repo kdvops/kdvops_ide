@@ -3,6 +3,7 @@
 import asyncio
 import hmac
 import json
+import logging
 import os
 import threading
 import time
@@ -10,6 +11,7 @@ from copy import deepcopy
 from dataclasses import dataclass
 from typing import Any
 from urllib.parse import urlsplit
+from uuid import uuid4
 
 import httpx
 import uvicorn
@@ -22,6 +24,7 @@ MAX_MESSAGES = 100
 MAX_MESSAGE_CHARS = 250_000
 MAX_TOTAL_MESSAGE_CHARS = 500_000
 MAX_TOOL_ARGUMENT_CHARS = 250_000
+LOGGER = logging.getLogger("kdvops.broker")
 
 
 @dataclass(frozen=True)
@@ -262,9 +265,11 @@ class BrokerApp:
         self.transport = transport
 
     @staticmethod
-    async def _response(send, status: int, payload: dict) -> None:
+    async def _response(send, status: int, payload: dict, *, request_id: str | None = None) -> None:
         body = json.dumps(payload, separators=(",", ":")).encode()
         headers = [(b"content-type", b"application/json"), (b"cache-control", b"no-store")]
+        if request_id is not None:
+            headers.append((b"x-request-id", request_id.encode("ascii")))
         await send({"type": "http.response.start", "status": status, "headers": headers})
         await send({"type": "http.response.body", "body": body})
 
@@ -346,6 +351,12 @@ class BrokerApp:
         except (TypeError, ValueError, json.JSONDecodeError) as exc:
             await self._response(send, 400, {"error": {"message": str(exc), "type": "invalid_request_error"}})
             return
+        request_id = f"req-{uuid4()}"
+        started = time.monotonic()
+        request_chars = sum(
+            len(message.get("content") or "") for message in safe_payload["messages"]
+        )
+        status = 502
         try:
             async with httpx.AsyncClient(
                 timeout=self.config.upstream_timeout,
@@ -366,13 +377,40 @@ class BrokerApp:
             output = json.loads(body)
             if not isinstance(output, dict):
                 raise TypeError("Invalid upstream response")
-        except (httpx.HTTPError, TypeError, ValueError, json.JSONDecodeError):
-            await self._response(send, 502, {"error": {"message": "Upstream Gateway error", "type": "api_error"}})
+            status = 200
+        except (httpx.HTTPError, TypeError, ValueError, json.JSONDecodeError) as exc:
+            LOGGER.warning(
+                "request_id=%s status=502 elapsed_ms=%d messages=%d request_chars=%d error=%s",
+                request_id,
+                int((time.monotonic() - started) * 1000),
+                len(safe_payload["messages"]),
+                request_chars,
+                type(exc).__name__,
+            )
+            await self._response(
+                send,
+                502,
+                {"error": {"message": "Upstream Gateway error", "type": "api_error"}},
+                request_id=request_id,
+            )
             return
-        await self._response(send, 200, output)
+        LOGGER.info(
+            "request_id=%s status=%d elapsed_ms=%d messages=%d request_chars=%d response_bytes=%d",
+            request_id,
+            status,
+            int((time.monotonic() - started) * 1000),
+            len(safe_payload["messages"]),
+            request_chars,
+            len(body),
+        )
+        await self._response(send, 200, output, request_id=request_id)
 
 
 def serve(config: BrokerConfig) -> None:
+    logging.basicConfig(
+        level=os.getenv("KDVOPS_LOG_LEVEL", "INFO").upper(),
+        format="%(asctime)s %(levelname)s %(name)s %(message)s",
+    )
     uvicorn.run(
         BrokerApp(config),
         host=config.bind_host,

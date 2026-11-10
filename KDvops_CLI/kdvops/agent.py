@@ -1,5 +1,6 @@
 """OpenAI-compatible client using a constrained JSON protocol for local tools."""
 import json
+import time
 from uuid import uuid4
 
 import httpx
@@ -14,6 +15,7 @@ TOOLS = [
     {"type": "function", "function": {"name": "kubectl_read", "description": "Observe Kubernetes resources with a strictly read-only kubectl allowlist. Secrets, exec, mutation, interactive, watch, proxy, and credential override operations are blocked.", "parameters": {"type": "object", "properties": {"args": {"type": "array", "items": {"type": "string"}, "minItems": 1, "maxItems": 32}}, "required": ["args"], "additionalProperties": False}}},
 ]
 TOOL_NAMES = {tool["function"]["name"] for tool in TOOLS}
+MAX_UPSTREAM_TURNS = 20
 
 
 def decode_protocol_message(message: dict) -> dict:
@@ -84,6 +86,8 @@ class AgentClient:
         self.settings = settings
         self.transport = transport
         self.conversation_id = conversation_id or f"kdvops:{uuid4()}"
+        self._upstream_turns = 0
+        self.max_upstream_turns = getattr(settings, "max_upstream_turns", MAX_UPSTREAM_TURNS)
         self.privacy = PrivacyFilter(
             (
                 getattr(settings, "token", ""),
@@ -138,7 +142,16 @@ class AgentClient:
         return models
 
     def complete(self, messages: list[dict]) -> dict:
+        # OpenClaw keeps server-side state for the stable ``user`` value. Long
+        # tool sessions used to grow that hidden transcript until Cloudflare
+        # timed out with HTTP 524. The full bounded client history is sent on
+        # every request, so rotating the upstream conversation periodically
+        # preserves continuity while bounding server-side accumulation.
+        if self._upstream_turns >= self.max_upstream_turns:
+            self.conversation_id = f"kdvops:{uuid4()}"
+            self._upstream_turns = 0
         url = self.settings.endpoint + "/chat/completions"
+        started = time.monotonic()
         with self._client() as client:
             response = client.post(
                 url,
@@ -150,7 +163,19 @@ class AgentClient:
                     "stream": False,
                 },
             )
-            response.raise_for_status()
+            self._upstream_turns += 1
+            try:
+                response.raise_for_status()
+            except httpx.HTTPStatusError as exc:
+                elapsed = time.monotonic() - started
+                ray = response.headers.get("cf-ray", "unavailable")[:80]
+                request_id = response.headers.get("x-request-id", "unavailable")[:128]
+                raise httpx.HTTPStatusError(
+                    f"HTTP {response.status_code} after {elapsed:.1f}s "
+                    f"(cf-ray={ray}, request-id={request_id})",
+                    request=exc.request,
+                    response=exc.response,
+                ) from exc
             payload = response.json()
         try:
             message = payload["choices"][0]["message"]

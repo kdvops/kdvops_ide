@@ -185,6 +185,24 @@ docker compose run --rm --entrypoint kdvops kdvops-runtime doctor
 
 The command verifies authentication, confirms that `/v1/models` returns the OpenClaw agent targets, and detects the common case where the Gateway serves dashboard HTML because Chat Completions is disabled.
 
+For HTTP 524 incidents, the CLI reports elapsed time plus safe `cf-ray` and request-ID correlation values.
+The broker emits one metadata-only log entry per completion with its request ID, duration, message count,
+request character count, response size, and error class; it never logs prompts, responses, or credentials.
+If the mounted kubeconfig has read-only permission for the `kdvops-system` namespace, the agent can inspect
+these server-side container logs through its existing `kubectl_read` action. Operators can inspect them
+directly too:
+
+```bash
+kubectl -n kdvops-system logs deploy/kdvops-broker --since=30m
+kubectl -n kdvops-system logs deploy/openclaw-kdvops --since=30m
+```
+
+The client rotates the hidden upstream conversation after 20 completion calls by default (configurable with
+`KDVOPS_MAX_UPSTREAM_TURNS`) while retaining the bounded local history. Recursive workspace listings skip
+common dependency, cache, VCS, and build-output
+directories. Together these controls prevent oversized hidden transcripts from recreating the observed
+Cloudflare timeout.
+
 For a broker protected by Cloudflare Access, configure the dedicated Service Token alongside the broker token:
 
 ```env

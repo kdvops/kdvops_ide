@@ -8,6 +8,7 @@ def test_settings_from_env(tmp_path, monkeypatch):
     monkeypatch.setenv("OPENCLAW_TOKEN", "token")
     monkeypatch.setenv("OPENCLAW_MODEL", "model")
     monkeypatch.setenv("KDVOPS_TIMEOUT", "123")
+    monkeypatch.setenv("KDVOPS_MAX_UPSTREAM_TURNS", "7")
     monkeypatch.setenv("KDVOPS_TLS_VERIFY", "false")
     monkeypatch.setenv("CF_ACCESS_CLIENT_ID", "client-id")
     monkeypatch.setenv("CF_ACCESS_CLIENT_SECRET", "client-secret")
@@ -23,6 +24,7 @@ def test_settings_from_env(tmp_path, monkeypatch):
     assert settings.endpoint == "https://example.test/v1"
     assert settings.workspace == tmp_path
     assert settings.timeout == 123
+    assert settings.max_upstream_turns == 7
     assert settings.tls_verify is False
     assert settings.cf_access_client_id == "client-id"
     assert settings.cf_access_client_secret == "client-secret"
@@ -101,6 +103,17 @@ def test_settings_requires_positive_timeout(tmp_path, monkeypatch):
     monkeypatch.setenv("KDVOPS_TIMEOUT", "0")
 
     with pytest.raises(ValueError, match="KDVOPS_TIMEOUT"):
+        Settings.from_env()
+
+
+@pytest.mark.parametrize("value", ["0", "1001"])
+def test_settings_requires_bounded_upstream_turns(tmp_path, monkeypatch, value):
+    monkeypatch.setenv("OPENCLAW_API_URL", "https://example.test/v1")
+    monkeypatch.setenv("OPENCLAW_TOKEN", "token")
+    monkeypatch.setenv("KDVOPS_WORKSPACE", str(tmp_path))
+    monkeypatch.setenv("KDVOPS_MAX_UPSTREAM_TURNS", value)
+
+    with pytest.raises(ValueError, match="KDVOPS_MAX_UPSTREAM_TURNS"):
         Settings.from_env()
 
 

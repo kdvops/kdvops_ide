@@ -3,7 +3,7 @@ import pytest
 import typer
 from typer.testing import CliRunner
 
-from kdvops.cli import app, chat_loop
+from kdvops.cli import app, chat_loop, explain_connection_error
 from kdvops.config import Settings
 
 runner = CliRunner()
@@ -158,3 +158,12 @@ def test_run_returns_one_on_connection_error(tmp_path, monkeypatch):
     )
     assert result.exit_code == 1
     assert "Connection or protocol error" in result.output
+
+
+def test_explain_connection_error_identifies_cloudflare_524():
+    request = httpx.Request("POST", "https://example.test/v1/chat/completions")
+    response = httpx.Response(524, request=request)
+    error = httpx.HTTPStatusError("HTTP 524", request=request, response=response)
+
+    assert "Cloudflare" in explain_connection_error(error)
+    assert "broker" in explain_connection_error(error)

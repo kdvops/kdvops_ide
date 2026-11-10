@@ -14,6 +14,7 @@ class Settings:
     cf_access_client_secret: str = ""
     timeout: float = 300.0
     run_timeout: float = 1800.0
+    max_upstream_turns: int = 20
     tls_verify: bool = True
     allow_sensitive_reads: bool = False
     allow_sensitive_writes: bool = False
@@ -35,6 +36,7 @@ class Settings:
         model = os.getenv("OPENCLAW_MODEL", "openclaw").strip()
         timeout = float(os.getenv("KDVOPS_TIMEOUT", "300"))
         run_timeout = float(os.getenv("KDVOPS_RUN_TIMEOUT", "1800"))
+        max_upstream_turns = int(os.getenv("KDVOPS_MAX_UPSTREAM_TURNS", "20"))
         tls_verify = os.getenv("KDVOPS_TLS_VERIFY", "true").strip().lower() not in {
             "0", "false", "no",
         }
@@ -78,6 +80,8 @@ class Settings:
             raise ValueError("KDVOPS_TIMEOUT must be greater than zero")
         if not math.isfinite(run_timeout) or not 0 < run_timeout <= 86_400:
             raise ValueError("KDVOPS_RUN_TIMEOUT must be finite and between 0 and 86400 seconds")
+        if not 1 <= max_upstream_turns <= 1_000:
+            raise ValueError("KDVOPS_MAX_UPSTREAM_TURNS must be between 1 and 1000")
         if bool(cf_access_client_id) != bool(cf_access_client_secret):
             raise ValueError(
                 "CF_ACCESS_CLIENT_ID and CF_ACCESS_CLIENT_SECRET must be configured together"
@@ -91,6 +95,7 @@ class Settings:
             cf_access_client_secret=cf_access_client_secret,
             timeout=timeout,
             run_timeout=run_timeout,
+            max_upstream_turns=max_upstream_turns,
             tls_verify=tls_verify,
             allow_sensitive_reads=allow_sensitive_reads,
             allow_sensitive_writes=allow_sensitive_writes,

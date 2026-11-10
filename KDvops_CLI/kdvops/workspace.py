@@ -18,6 +18,26 @@ SENSITIVE_NAMES = {
     "kubeconfig",
 }
 SENSITIVE_SUFFIXES = {".key", ".p12", ".pfx", ".pem"}
+IGNORED_DIRECTORIES = {
+    ".angular",
+    ".cache",
+    ".git",
+    ".idea",
+    ".mypy_cache",
+    ".next",
+    ".pytest_cache",
+    ".ruff_cache",
+    ".tox",
+    ".venv",
+    ".vscode",
+    "__pycache__",
+    "build",
+    "coverage",
+    "dist",
+    "node_modules",
+    "target",
+    "vendor",
+}
 
 
 class Workspace:
@@ -141,6 +161,11 @@ class Workspace:
                         for entry in entries:
                             relative = current_prefix / entry.name
                             display_path = self.root / relative
+                            if (
+                                entry.is_dir(follow_symlinks=False)
+                                and entry.name.lower() in IGNORED_DIRECTORIES
+                            ):
+                                continue
                             if entry.is_symlink() or (
                                 not self.allow_sensitive_reads and self._is_sensitive(display_path)
                             ):
